@@ -1,0 +1,47 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Case folders %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+DATADIR=C:\Users\juan.ramos\Contour_generator\Datasets_training
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Analysis %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+TYPEANALYSIS=SINGLETRAINING   % SINGLETRAINING, SENSANALYSIS 
+IMPORTMODEL=0
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Training parameters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Training parameters
+TRAINSIZE=0.75
+LEARNINGRATE=0.005
+L2REG=0.05
+L1REG=NONE
+DROPOUT=0.0
+EPOCHS=20
+BATCHSIZE=16
+LATENTDIM=5
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Image processing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+IMAGERESIZE=(133,100)  % (width, height)
+% Rotation
+ROTATION=1
+ROTATIONCENTER=(NONE,NONE)
+ROTATIONANGLE=15
+% Zoom
+ZOOM=0
+ZOOMFACTOR=1.5
+% Translation
+TRANSLATION=0
+TRANSLATIONDIST=(0,0)
+% Filter
+FILTER=0
+FILTERTYPE=GAUSSIAN
+FILTERPARAM=(SIZE,5,SIGMA,3)
+%FILTERPARAM=(D,20,SIGMACOLOR,5,SIGMASPACE,3)
+% Flip
+FLIP=0
+FLIPTYPE=HORIZONTAL
+FLIPTYPE=VERTICAL
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
