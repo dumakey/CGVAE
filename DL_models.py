@@ -52,7 +52,7 @@ def encoder(input_dim, hidden_dim, latent_dim, activation):
     Encoder network.
     Returns the mean and the log variances of the latent distribution
     '''
-    '''
+    
     encoder = tf.keras.Sequential(name='encoder')
     encoder.add(tf.keras.Input(shape=(input_dim,)))
     for hidden_layer_dim in hidden_dim:
@@ -60,43 +60,24 @@ def encoder(input_dim, hidden_dim, latent_dim, activation):
         encoder.add(tf.keras.layers.BatchNormalization())
         encoder.add(tf.keras.layers.Activation(activation))
     encoder.add(tf.keras.layers.Dense(2 * latent_dim))
-    '''
-    X_input = tf.keras.Input(shape=(input_dim,))
-    encoder = X_input
-    for hidden_layer_dim in hidden_dim:
-        encoder = tf.keras.layers.Dense(hidden_layer_dim, activation=None)(encoder)
-        encoder = tf.keras.layers.BatchNormalization()(encoder)
-        encoder = tf.keras.layers.Activation(activation)(encoder)
-    encoder = tf.keras.layers.Dense(2 * latent_dim)(encoder)
-    model = tf.keras.Model(inputs=X_input,outputs=encoder, name='encoder')
-    return model
 
+    return encoder
 
 def decoder(latent_dim, hidden_dim, output_dim, activation):
     '''
     Decoder network
     It assumes that the image is a normalized black & white image so each pixel ranges between 0 and 1
     '''
-    '''
+    
     decoder = tf.keras.Sequential(name='decoder')
     decoder.add(tf.keras.Input(shape=(latent_dim,)))
     for hidden_layer_dim in hidden_dim:
         decoder.add(tf.keras.layers.Dense(hidden_layer_dim, activation=None))
         # decoder.add(tf.keras.layers.BatchNormalization())
         decoder.add(tf.keras.layers.Activation(activation))
-
     decoder.add(tf.keras.layers.Dense(output_dim, activation='sigmoid'))
-    '''
-    X_input = tf.keras.Input(shape=(latent_dim,))
-    decoder = X_input
-    for hidden_layer_dim in hidden_dim:
-        decoder = tf.keras.layers.Dense(hidden_layer_dim, activation=None)(decoder)
-        # decoder.add(tf.keras.layers.BatchNormalization())
-        decoder = tf.keras.layers.Activation(activation)(decoder)
-
-    decoder = tf.keras.layers.Dense(output_dim, activation='sigmoid')(decoder)
-    model = tf.keras.Model(inputs=X_input, outputs=decoder, name='decoder')
-    return model
+    
+    return decoder
 
 def VAE(input_dim, latent_dim, alpha, l2_reg=0.0, l1_reg=0.0, dropout=0.0, mode='train'):
 
@@ -127,7 +108,7 @@ def VAE(input_dim, latent_dim, alpha, l2_reg=0.0, l1_reg=0.0, dropout=0.0, mode=
         t = tf.keras.Input(shape=(latent_dim,))
         t_mean = tf.zeros_like(t)
         t_log_var = tf.zeros_like(t)
-        d = decoder(latent_dim,decoder_dims,input_dim,act_fun)
+        d = decoder(latent_dim,decoder_hidden_layers,input_dim,act_fun)
         x_decoded = d(t)
 
         # Declare inputs/outputs for the model
@@ -138,7 +119,7 @@ def VAE(input_dim, latent_dim, alpha, l2_reg=0.0, l1_reg=0.0, dropout=0.0, mode=
     loss = loss_function(x,x_decoded,t_mean,t_log_var)
     model = tf.keras.Model(input,output)
     model.summary()
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.008),loss=lambda x,y: loss,
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=alpha),loss=lambda x,y: loss,
                   metrics=[tf.keras.metrics.MeanSquaredError()])
 
     return model

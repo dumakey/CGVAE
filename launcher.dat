@@ -14,16 +14,16 @@ IMPORTMODEL=0
 % Training parameters
 TRAINSIZE=0.75
 LEARNINGRATE=0.005
-L2REG=0.05
+L2REG=NONE
 L1REG=NONE
-DROPOUT=0.0
+DROPOUT=NONE
 EPOCHS=20
-BATCHSIZE=16
-LATENTDIM=5
+BATCHSIZE=32
+LATENTDIM=25
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Image processing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-IMAGERESIZE=(133,100)  % (width, height)
+IMAGERESIZE=(50,50)  % (width, height)
 % Rotation
 ROTATION=1
 ROTATIONCENTER=(NONE,NONE)

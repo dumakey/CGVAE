@@ -111,12 +111,20 @@ class CGenTrainer:
     def preprocess_data(self, im_tilde, im):
 
         im_tilde_tf = tf.cast(im_tilde,tf.float32)
-        im_tilde_tf = im_tilde_tf/127.5
-        im_tilde_tf = im_tilde_tf - 1
+        im_tilde_tf = im_tilde_tf/255
 
         im_tf = tf.cast(im,tf.float32)
-        im_tf = im_tf/127.5
-        im_tf = im_tf - 1
+        im_tf = im_tf/255
+
+        return im_tilde_tf, im_tf
+
+    def preprocess_data_2(self, im_tilde, im):
+
+        im_tilde_tf = im_tilde.astype(np.float32)
+        im_tilde_tf = im_tilde_tf/255
+
+        im_tf = im.astype(np.float32)
+        im_tf = im_tf/255
 
         return im_tilde_tf, im_tf
 
@@ -140,15 +148,16 @@ class CGenTrainer:
 
         img_dimensions = self.parameters.img_processing['slice_size']
         m = len(img)
-        img_prep = np.zeros((m,img_dimensions[1]*img_dimensions[0]))
+        imgs_processed = np.zeros((m,img_dimensions[1]*img_dimensions[0]),dtype=np.float32)
         for i in range(m):
             if img[i].shape[0:2] != (img_dimensions[1],img_dimensions[0]):
-                img_resized = ImageTransformer.resize(img[i],img_dimensions)
+                img_processed = ImageTransformer.resize(img[i],img_dimensions)
             else:
-                img_resized = img[i]
-            img_prep[i] = img_resized.reshape((np.prod(img_resized.shape[0:])))
+                img_processed = img[i]
+            img_processed = cv.bitwise_not(img_processed)
+            imgs_processed[i] = img_processed.reshape((np.prod(img_processed.shape[0:])))
 
-        return img_prep
+        return imgs_processed
 
     def set_datasets(self):
 
@@ -158,6 +167,13 @@ class CGenTrainer:
         X = self.preprocess_image(X)
 
         X_train, X_val = train_test_split(X,train_size=self.parameters.training_parameters['train_size'],shuffle=True)
+        '''
+        (X_train, _), (X_val, _) = tf.keras.datasets.mnist.load_data()
+        X_train = X_train.astype('float32')/255.
+        X_val = X_val.astype('float32')/255.
+        X_train = X_train.reshape((len(X_train), np.prod(X_train.shape[1:])))
+        X_val = X_val.reshape((len(X_val), np.prod(X_val.shape[1:])))
+        '''
         X_cv, X_test = train_test_split(X_val,train_size=0.75,shuffle=True)
 
         self.datasets.data_train = (X_train, X_train)
@@ -188,6 +204,7 @@ class CGenTrainer:
 
         # Parameters
         input_dim = self.datasets.dataset_train.element_spec[0].shape[-1]
+        #input_dim = self.datasets.data_train[0].shape[-1]
         latent_dim = self.parameters.training_parameters['latent_dim']
         alpha = self.parameters.training_parameters['learning_rate']
         nepoch = self.parameters.training_parameters['epochs']
@@ -202,26 +219,34 @@ class CGenTrainer:
             pretrained_model = self.model.Model
 
         if sens_var == None:  # If it is a one-time training
-            self.model.Model = models.VAE(input_dim,latent_dim,alpha,mode='train')
-            self.model.History = self.model.Model.fit(self.datasets.dataset_train,validation_data=self.datasets.dataset_cv,
-                                                      epochs=nepoch,steps_per_epoch=500,validation_steps=None)
+            self.model.Model = models.VAE(input_dim,latent_dim,alpha,l2_reg,l1_reg,dropout,mode='train')
+            #self.model.History = self.model.Model.fit(x=self.datasets.data_train[0],
+            #                                          y=self.datasets.data_train[1],
+            #                                          shuffle=True, batch_size=batch_size,
+            #                                          validation_data=(self.datasets.data_cv[0],self.datasets.data_cv[1]),
+            #                                          epochs=nepoch)
+
+            self.model.History = self.model.Model.fit(self.datasets.dataset_train,epochs=nepoch,
+                                                      steps_per_epoch=200,validation_data=self.datasets.dataset_cv,
+                                                      validation_steps=None)
+
             ## TRAIN ##
             n_samples = 10
-            img_size = int(np.sqrt(x_train.shape[1]))
-            ## PLOT GENERATED TRAINING DATA ## 
-            fig = plt.figure(figsize=(10, 10))
-            for fid_idx, (data, title) in enumerate(zip([x_train, x_test], ['Train', 'Validation'])):
-                n = 10  # figure with 10 x 2 digits
-                figure = np.zeros((img_size*n,img_size*2))
-                for i in range(n_samples):
-                    x_dec = VAE.predict(data[i,:].reshape((1,img_size**2)))
-                    x_dec = np.reshape(x_dec,(img_size,img_size))
-                    figure[i*img_size:(i+1)*img_size,:img_size] = data[i,:].reshape(img_size,img_size)
-                    figure[i*img_size:(i+1)*img_size,img_size:] = x_dec
-                ax = fig.add_subplot(1,2,fid_idx + 1)
-                ax.imshow(figure, cmap='Greys_r')
-                ax.set_title(title)
-                ax.axis('off')
+            width, height = self.parameters.img_processing['slice_size']
+            ## PLOT GENERATED TRAINING DATA ##
+            fig, ax = plt.subplots(5,2,sharex=True,figsize=(10,10))
+            for fid_idx, (data, title) in enumerate(
+                    zip([self.datasets.data_train[0],self.datasets.data_test[0]], ['Train','Test'])):
+                ii = 0
+                for i in range(n_samples//2):
+                    for j in range(2):
+                        x_dec = self.model.Model.predict(data[ii,:].reshape((1,height*width)))
+                        x_dec = np.reshape(x_dec,(width,height))
+                        ax[i,j].imshow(x_dec,cmap='Greys_r')
+                        fig_set = fig.add_subplot(5,2,fid_idx + 1)
+                        fig_set.set_title(title)
+                        fig_set.axis('off')
+                        ii += 1
             plt.show()
 
         else: # If it is a sensitivity analysis
@@ -230,7 +255,7 @@ class CGenTrainer:
             if type(alpha) == list:
                 for learning_rate in alpha:
                     if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,learning_rate,mode='train')
+                        model = models.VAE(input_dim,latent_dim,learning_rate,l2_reg,l1_reg,dropout,mode='train')
                     self.model.Model.append(model)
                     self.model.History.append(model.fit(self.datasets.dataset_train,shuffle=True,epochs=nepoch,
                                                               validation_data=self.datasets.dataset_cv,
