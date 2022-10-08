@@ -40,7 +40,8 @@ class CGenTrainer:
         self.parameters.analysis = casedata.analysis
         self.parameters.training_parameters = casedata.training_parameters
         self.parameters.img_processing = casedata.img_processing
-        self.dataset_dir = casedata.case_dir
+        self.parameters.samples_generation = casedata.samples_generation
+        self.case_dir = casedata.case_dir
 
         # Sensitivity analysis variable identification
         sens_vars = [parameter for parameter in self.parameters.training_parameters.items() if type(parameter[1]) == list]
@@ -67,10 +68,10 @@ class CGenTrainer:
         analysis_list = {
                         'SINGLETRAINING': self.singletraining,
                         'SENSANALYSIS': self.sensitivity_analysis_on_training,
+                        'GENERATE': self.contour_generation,
                         }
 
-        for analysis in analysis_list.keys():
-            analysis_list[analysis_ID]()
+        analysis_list[analysis_ID]()
 
     def sensitivity_analysis_on_training(self):
 
@@ -91,21 +92,27 @@ class CGenTrainer:
         self.train_model()
         self.export_model_performance()
         self.export_model()
-        self.predict_on_test_set()
 
     def contour_generation(self):
 
+        if self.model.imported == False:
+            self.singletraining()
+
         ## GENERATE NEW DATA - SAMPLING ##
-        X_samples = self.generate_samples(VAE,latent_dim,decoder_hidden_layers,n_samples,act_fun)
+        X_samples = self.generate_samples()
         print()
 
-        # Show the sampled images.
+        # Show the sampled images
+        n_samples = X_samples.shape[0]
+        width, height = self.parameters.img_processing['slice_size']
         plt.figure()
         for i in range(n_samples):
             ax = plt.subplot(n_samples//5 + 1,5,i+1)
-            plt.imshow(X_samples[i,:].reshape(img_size,img_size), cmap='gray')
+            plt.imshow(X_samples[i,:].reshape((width,height)), cmap='gray')
             ax.axis('off')
-        plt.show()
+        #plt.show()
+        plt.savefig(os.path.join(self.case_dir,'Results','generated_samples.png'), dpi=100)
+        plt.close()
         print()
 
     def preprocess_data(self, im_tilde, im):
@@ -118,20 +125,10 @@ class CGenTrainer:
 
         return im_tilde_tf, im_tf
 
-    def preprocess_data_2(self, im_tilde, im):
-
-        im_tilde_tf = im_tilde.astype(np.float32)
-        im_tilde_tf = im_tilde_tf/255
-
-        im_tf = im.astype(np.float32)
-        im_tf = im_tf/255
-
-        return im_tilde_tf, im_tf
-
     def read_dataset(self, format='png'):
 
         img_filepaths = []
-        for (root, case_dirs, _) in os.walk(self.dataset_dir):
+        for (root, case_dirs, _) in os.walk(self.case_dir,'Datasets_training'):
             for case_dir in case_dirs:
                 files = [os.path.join(root,case_dir,file) for file in os.listdir(os.path.join(root,case_dir)) if file.endswith(format)]
                 img_filepaths += files
@@ -148,14 +145,16 @@ class CGenTrainer:
 
         img_dimensions = self.parameters.img_processing['slice_size']
         m = len(img)
-        imgs_processed = np.zeros((m,img_dimensions[1]*img_dimensions[0]),dtype=np.float32)
+        #imgs_processed = np.zeros((m,img_dimensions[1]*img_dimensions[0]),dtype=np.float32)
+        imgs_processed = np.zeros((m,img_dimensions[1],img_dimensions[0]),dtype=np.float32)
         for i in range(m):
             if img[i].shape[0:2] != (img_dimensions[1],img_dimensions[0]):
                 img_processed = ImageTransformer.resize(img[i],img_dimensions)
             else:
                 img_processed = img[i]
             img_processed = cv.bitwise_not(img_processed)
-            imgs_processed[i] = img_processed.reshape((np.prod(img_processed.shape[0:])))
+            #imgs_processed[i] = img_processed.reshape((np.prod(img_processed.shape[0:])))
+            imgs_processed[i] = img_processed
 
         return imgs_processed
 
@@ -167,13 +166,6 @@ class CGenTrainer:
         X = self.preprocess_image(X)
 
         X_train, X_val = train_test_split(X,train_size=self.parameters.training_parameters['train_size'],shuffle=True)
-        '''
-        (X_train, _), (X_val, _) = tf.keras.datasets.mnist.load_data()
-        X_train = X_train.astype('float32')/255.
-        X_val = X_val.astype('float32')/255.
-        X_train = X_train.reshape((len(X_train), np.prod(X_train.shape[1:])))
-        X_val = X_val.reshape((len(X_val), np.prod(X_val.shape[1:])))
-        '''
         X_cv, X_test = train_test_split(X_val,train_size=0.75,shuffle=True)
 
         self.datasets.data_train = (X_train, X_train)
@@ -203,8 +195,8 @@ class CGenTrainer:
     def train_model(self, sens_var=None):
 
         # Parameters
-        input_dim = self.datasets.dataset_train.element_spec[0].shape[-1]
-        #input_dim = self.datasets.data_train[0].shape[-1]
+        input_dim = self.datasets.dataset_train.element_spec[0].shape
+        input_dim = self.datasets.dataset_train.element_spec[0].shape
         latent_dim = self.parameters.training_parameters['latent_dim']
         alpha = self.parameters.training_parameters['learning_rate']
         nepoch = self.parameters.training_parameters['epochs']
@@ -229,7 +221,7 @@ class CGenTrainer:
             self.model.History = self.model.Model.fit(self.datasets.dataset_train,epochs=nepoch,
                                                       steps_per_epoch=200,validation_data=self.datasets.dataset_cv,
                                                       validation_steps=None)
-
+            '''
             ## TRAIN ##
             n_samples = 10
             width, height = self.parameters.img_processing['slice_size']
@@ -247,7 +239,9 @@ class CGenTrainer:
                         fig_set.set_title(title)
                         fig_set.axis('off')
                         ii += 1
-            plt.show()
+            #plt.show()
+            plt.savefig(os.path.join(self.case_dir,'Results','training_samples.png'),dpi=100)
+            '''
 
         else: # If it is a sensitivity analysis
             self.model.Model = []
@@ -286,12 +280,14 @@ class CGenTrainer:
                                                               steps_per_epoch=500,validation_steps=None))
 
 
-    def generate_samples(self, n_samples):
+    def generate_samples(self):
 
         ## BUILD DECODER ##
+        n_samples = self.parameters.samples_generation['n_samples']
         output_dim = self.model.Model.input.shape[1]
         latent_dim = self.parameters.training_parameters['latent_dim']
-        decoder = models.VAE(output_dim,latent_dim,dropout=0.0,l2_reg=0.0,l1_reg=0.0,mode='sample')
+        alpha = self.parameters.training_parameters['learning_rate']
+        decoder = models.VAE(output_dim,latent_dim,alpha,dropout=0.0,l2_reg=0.0,l1_reg=0.0,mode='sample')  # No regularization
         # Retrieve decoder weights
         model_weights = self.model.Model.weights
         j = 0
@@ -345,10 +341,10 @@ class CGenTrainer:
                 ax.legend()
 
                 if sens_var:
-                    storage_dir = os.path.join(os.path.dirname(self.dataset_dir),'Model_performance','{}={:.3f}'.format(
+                    storage_dir = os.path.join(self.case_dir,'Results','Model_performance','{}={:.3f}'.format(
                                                sens_var[0],sens_var[1][i]))
                 else:
-                    storage_dir = os.path.join(os.path.dirname(self.dataset_dir),'Model_performance')
+                    storage_dir = os.path.join(self.case_dir,'Results','Model_performance')
                 if os.path.exists(storage_dir):
                     rmtree(storage_dir)
                 os.makedirs(storage_dir)
@@ -381,33 +377,33 @@ class CGenTrainer:
 
         for i in range(N):
             if sens_var:
-                weights_dir = os.path.join(os.path.dirname(self.dataset_dir),'Model','{}={:.3f}'.format(sens_var[0],sens_var[1][i]))
+                weights_dir = os.path.join(self.case_dir,'Results','Model','{}={:.3f}'.format(sens_var[0],sens_var[1][i]))
             else:
-                weights_dir = os.path.join(os.path.dirname(self.dataset_dir),'Model')
+                weights_dir = os.path.join(self.case_dir,'Results','Model')
             if os.path.exists(weights_dir):
                 rmtree(weights_dir)
             os.makedirs(weights_dir)
 
             # Export model arquitecture to JSON file
             model_json = model[i].to_json()
-            with open(os.path.join(weights_dir,'SW_model_arquitecture.json'),'w') as json_file:
+            with open(os.path.join(weights_dir,'CGAE_model_arquitecture.json'),'w') as json_file:
                 json_file.write(model_json)
 
             # Export model weights to HDF5 file
-            model[i].save_weights(os.path.join(weights_dir,'SW_model_weights.h5'))
+            model[i].save_weights(os.path.join(weights_dir,'CGAE_model_weights.h5'))
 
     def reconstruct_model(self):
 
-        weights_dir = os.path.join(os.path.dirname(self.dataset_dir),'pretrained_Model')
+        weights_dir = os.path.join(self.case_dir,'Results','pretrained_Model')
         # Load JSON file
-        json_file = open(os.path.join(weights_dir,'SW_model_arquitecture.json'),'r')
+        json_file = open(os.path.join(weights_dir,'CGAE_model_arquitecture.json'),'r')
         loaded_model_json = json_file.read()
         json_file.close()
 
         # Build model
         self.model.Model = tf.keras.models.model_from_json(loaded_model_json)
         # Load weights into new model
-        self.model.Model.load_weights(os.path.join(weights_dir,'SW_model_weights.h5'))
+        self.model.Model.load_weights(os.path.join(weights_dir,'CGAE_model_weights.h5'))
 
 
 if __name__ == '__main__':
