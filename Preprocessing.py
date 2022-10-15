@@ -4,8 +4,8 @@ import numpy as np
 
 class ImageTransformer:
 
-    def __init__(self, img_transformation_param):
-        self.transformation_parameters = img_transformation_param
+    def __init__(self, transformations):
+        self.transformations = transformations
 
     @staticmethod
     def resize(frame, resizing=None, plot=False):
@@ -36,8 +36,8 @@ class ImageTransformer:
         if px_crop:
             px_w0, px_wf, px_h0, px_hf = px_crop
         else:
-            px_h_left = np.where(image[:,0,:] != 0)
-            px_h_right = np.where(image[:,-1,:] != 0)
+            px_h_left = np.where(image[:,0,] != 0)
+            px_h_right = np.where(image[:,-1,] != 0)
             if px_h_left[0].size != 0:
                 px_h0 = np.min([px_h_left[0][0],px_h_right[0][0]])
                 px_hf = np.max([px_h_left[0][-1],px_h_right[0][-1]])
@@ -45,8 +45,8 @@ class ImageTransformer:
                 px_h0 = 0
                 px_hf = image.shape[0] - 1
 
-            px_w_top = np.where(image[0,:,:] != 0)
-            px_w_bottom = np.where(image[-1,:,:] != 0)
+            px_w_top = np.where(image[0,:,] != 0)
+            px_w_bottom = np.where(image[-1,:,] != 0)
             if px_w_top[0].size != 0:
                 px_w0 = np.min([px_w_top[0][0],px_w_bottom[0][0]])
                 px_wf = np.max([px_w_top[0][-1],px_w_bottom[0][-1]])
@@ -54,7 +54,7 @@ class ImageTransformer:
                 px_w0 = 0
                 px_wf = image.shape[1] - 1
 
-        cropped_image = image[px_h0:px_hf,px_w0:px_wf,:]
+        cropped_image = image[px_h0:px_hf,px_w0:px_wf,]
 
         if plot == True:
             cv.imshow('Cropped', cropped_image)
@@ -64,16 +64,17 @@ class ImageTransformer:
 
     def rotate(self, image, angle=None, rot_center_x=None, rot_center_y=None, plot=False):
 
-        image_height, image_width, _ = image.shape
+        image_height, image_width = image.shape
+
         if rot_center_x == None and rot_center_y == None:
-            rotCenter = (self.transformation_parameters['rotation'][0], self.transformation_parameters['rotation'][1])
+            rotCenter = (self.transformations['rotation'][0], self.transformations['rotation'][1])
             if np.any(np.array(rotCenter) == None):
                 rotCenter = (image_width//2,image_height//2)
         else:
             rotCenter = (rot_center_x,rot_center_y)
 
         if angle == None:
-            theta = self.transformation_parameters['rotation'][-1]
+            theta = self.transformations['rotation'][-1]
         else:
             theta = angle
 
@@ -91,10 +92,10 @@ class ImageTransformer:
 
     def translate(self, image, Dx=None, Dy=None, plot=False):
 
-        image_height, image_width, _ = image.shape
+        image_height, image_width = image.shape
 
         if Dx == None and Dy == None:
-            DX, DY = self.transformation_parameters['translation']
+            DX, DY = self.transformations['translation']
         else:
             DX = Dx
             DY = Dy
@@ -120,9 +121,9 @@ class ImageTransformer:
     def filter(self, image, kernel_name=None, kernel_parameters=None, plot=False):
 
         if kernel_name == None:
-            kernel_name = self.transformation_parameters['blur']['kernel']
+            kernel_name = self.transformations['blur']['kernel']
             if kernel_name in ['gaussian','median','bilateral']:
-                kernel_parameters = self.transformation_parameters['blur']['parameters']
+                kernel_parameters = self.transformations['blur']['parameters']
             else:
                 kernel_parameters = None
 
@@ -164,12 +165,12 @@ class ImageTransformer:
 
         dims = image.shape
         if f == None:
-            zoom_factor = self.transformation_parameters['zoom']
+            zoom_factor = self.transformations['zoom']
         else:
             zoom_factor = f
         angle = 0
 
-        cy, cx = [i//2 for i in dims[:-1]]
+        cy, cx = [i//2 for i in dims]
         A = cv.getRotationMatrix2D((cx,cy),angle,zoom_factor)
         zoomed_image = cv.warpAffine(image,A,dims[1::-1],flags=cv.INTER_LINEAR)
 
@@ -190,9 +191,9 @@ class ImageTransformer:
             'flip': self.flip,
         }
 
-        for ID in self.transformation_parameters.keys():
+        for ID in self.transformations.keys():
             F = operation_functions[ID]
-            fun_args = self.transformation_parameters[ID]
+            fun_args = self.transformations[ID]
             image = F(image,*fun_args)
 
         return image
