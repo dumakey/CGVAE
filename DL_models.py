@@ -28,6 +28,8 @@ def sampling(args):
 
     return t_mean + epsilon * tf.exp(t_log_var/2)
 
+
+#@tf.function
 def loss_function(x, x_decoded, t_mean, t_log_var):
     """Returns the value of negative Variational Lower Bound
 
@@ -45,7 +47,7 @@ def loss_function(x, x_decoded, t_mean, t_log_var):
     regularisation = 0.5 * tf.reduce_sum(-t_log_var + tf.math.exp(t_log_var) + tf.math.square(t_mean) - 1, axis=1)
 
     return tf.reduce_mean(-loss + regularisation, axis=0)
-    
+
 def conv2D_block(X, num_channels, f, p, s, dropout, **kwargs):
     if kwargs:
         parameters = list(kwargs.values())[0]
@@ -75,8 +77,7 @@ def conv2D_block(X, num_channels, f, p, s, dropout, **kwargs):
         net = tf.keras.layers.Activation('relu')(net)
 
     return net
-    
-    
+
 def encoder_lenet(input_dim, latent_dim, hidden_dim, l2_reg=0.0, l1_reg=0.0, dropout=0.0, activation='relu'):
 
     in_shape = (input_dim[1],input_dim[0])

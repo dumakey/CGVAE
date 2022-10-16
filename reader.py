@@ -124,7 +124,7 @@ def read_case_setup(launch_filepath):
     match = re.search('ROTATION\s*=\s*(\d).*', data)
     if match:
         casedata.img_processing['rotation'][0] = int(match.group(1))
-        match_angle = re.search('ROTATIONANGLE\s*=\s*(\d+\.?\d*).*', data)
+        match_angle = re.search('ROTATIONANGLE\s*=\s*([\+|\-]?\d+\.?\d*).*', data)
         if match_angle:
             casedata.img_processing['rotation'][1] = float(match_angle.group(1))
         match = re.search('ROTATIONCENTER\s*=\s*\((\d+|NONE)\,+(\d+|NONE)\).*', data)
@@ -138,7 +138,7 @@ def read_case_setup(launch_filepath):
     match = re.search('TRANSLATION\s*=\s*(\d).*', data)
     if match:
         casedata.img_processing['translation'][0] = int(match.group(1))
-        match_dist = re.search('TRANSLATIONDIST\s*=\s*\((\d+|NONE)\,+(\d+|NONE)\).*', data)
+        match_dist = re.search('TRANSLATIONDIST\s*=\s*\(([\+|\-]?\d+|NONE)\,+([\+|\-]?\d+|NONE)\).*', data)
         if match_dist:
             casedata.img_processing['translation'][1] = float(match_dist.group(1))
             casedata.img_processing['translation'][2] = float(match_dist.group(2))

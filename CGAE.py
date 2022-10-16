@@ -1,20 +1,19 @@
 # -*- coding: utf-8 -*-
-
 import os
 from shutil import rmtree
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-import cv2 as cv
 from collections import OrderedDict
+import pickle
+import cv2 as cv
 
-from sklearn.model_selection import train_test_split
 import tensorflow as tf
 from tensorflow.python.framework.ops import disable_eager_execution, enable_eager_execution
 disable_eager_execution()
 
+import Dataset_processing as Dataprocc
 import DL_models as models
-from Preprocessing import ImageTransformer
 import AugmentationDataset as ADS
 import reader
 
@@ -83,9 +82,15 @@ class CGenTrainer:
         # Retrieve sensitivity variable
         sens_variable = self.parameters.sens_variable
 
-        # Perform sensitivity analysis
-        self.set_datasets()
-        self.set_tensorflow_datasets()
+        case_dir = self.case_dir
+        training_size = self.parameters.training_parameters['train_size']
+        batch_size = self.parameters.training_parameters['batch_size']
+        img_size = self.parameters.img_size
+
+        self.datasets.data_train, self.datasets.data_cv, self.datasets.data_test = \
+        Dataprocc.get_datasets(case_dir,training_size,img_size)
+        self.datasets.dataset_train, self.datasets.dataset_cv, self.datasets.dataset_test = \
+        Dataprocc.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
         self.train_model(sens_variable)
         self.export_nn_log()
         self.export_model_performance(sens_variable)
@@ -93,8 +98,15 @@ class CGenTrainer:
 
     def singletraining(self):
 
-        self.set_datasets()
-        self.set_tensorflow_datasets()
+        case_dir = self.case_dir
+        training_size = self.parameters.training_parameters['train_size']
+        batch_size = self.parameters.training_parameters['batch_size']
+        img_size = self.parameters.img_size
+
+        self.datasets.data_train, self.datasets.data_cv, self.datasets.data_test = \
+        Dataprocc.get_datasets(case_dir,training_size,img_size)
+        self.datasets.dataset_train, self.datasets.dataset_cv, self.datasets.dataset_test = \
+        Dataprocc.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
         self.train_model()
         self.export_nn_log()
         self.export_model_performance()
@@ -105,106 +117,7 @@ class CGenTrainer:
         transformations = [{k:v[1:] for (k,v) in self.parameters.img_processing.items() if v[0] == 1}][0]
         augdata_size = self.parameters.data_augmentation[1]
         self.generate_augmented_data(transformations,augdata_size)
-
-    def contour_generation(self):
-
-        if self.model.imported == False:
-            self.singletraining()
-
-        ## GENERATE NEW DATA - SAMPLING ##
-        X_samples = self.generate_samples()
-        print()
-
-        # Show the sampled images
-        n_samples = X_samples.shape[0]
-        width, height = self.parameters.img_size
-        plt.figure()
-        for i in range(n_samples):
-            ax = plt.subplot(n_samples//5 + 1,5,i+1)
-            plt.imshow(X_samples[i,:].reshape((width,height)), cmap='gray')
-            ax.axis('off')
-        #plt.show()
-        plt.savefig(os.path.join(self.case_dir,'Results','generated_samples.png'), dpi=100)
-        plt.close()
-        print()
-
-    def preprocess_data(self, im_tilde, im):
-
-        im_tilde_tf = tf.cast(im_tilde,tf.float32)
-        im_tilde_tf = im_tilde_tf/255
-
-        im_tf = tf.cast(im,tf.float32)
-        im_tf = im_tf/255
-
-        return im_tilde_tf, im_tf
-
-    def read_dataset(self, dataset_folder='Training', format='png'):
-
-        img_filepaths = []
-        for (root, case_dirs, _) in os.walk(os.path.join(self.case_dir,'Datasets',dataset_folder)):
-            for case_dir in case_dirs:
-                files = [os.path.join(root,case_dir,file) for file in os.listdir(os.path.join(root,case_dir)) if file.endswith(format)]
-                img_filepaths += files
-
-        img_list = []
-        for filepath in img_filepaths:
-            img = cv.imread(filepath)
-            gray_img = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
-            img_list.append(gray_img)
-
-        return img_list
-
-    def preprocess_image(self, img):
-
-        img_dimensions = self.parameters.img_size
-        m = len(img)
-        imgs_processed = np.zeros((m,img_dimensions[1]*img_dimensions[0]),dtype=np.float32)
-        #imgs_processed = np.zeros((m,img_dimensions[1],img_dimensions[0]),dtype=np.float32)
-        for i in range(m):
-            if img[i].shape[0:2] != (img_dimensions[1],img_dimensions[0]):
-                img_processed = ImageTransformer.resize(img[i],img_dimensions)
-            else:
-                img_processed = img[i]
-            img_processed = cv.bitwise_not(img_processed)
-            imgs_processed[i] = img_processed.reshape((np.prod(img_processed.shape[0:])))
-            #imgs_processed[i] = img_processed
-
-        return imgs_processed
-
-    def set_datasets(self):
-
-        # Read original datasets
-        X = self.read_dataset()
-        # Resize images, if necessary
-        X = self.preprocess_image(X)
-
-        X_train, X_val = train_test_split(X,train_size=self.parameters.training_parameters['train_size'],shuffle=True)
-        X_cv, X_test = train_test_split(X_val,train_size=0.75,shuffle=True)
-
-        self.datasets.data_train = (X_train, X_train)
-        self.datasets.data_cv = (X_cv, X_cv)
-        self.datasets.data_test = (X_test, X_test)
-
-    def create_dataset_pipeline(self, dataset, is_train=True, num_threads=8, prefetch_buffer=100, batch_size=32):
-
-        dataset_tensor = tf.data.Dataset.from_tensor_slices(dataset)
-
-        if is_train:
-            dataset_tensor = dataset_tensor.shuffle(buffer_size=dataset[0].shape[0]).repeat()
-        dataset_tensor = dataset_tensor.map(self.preprocess_data,num_parallel_calls=num_threads)
-        dataset_tensor = dataset_tensor.batch(batch_size)
-        dataset_tensor = dataset_tensor.prefetch(prefetch_buffer)
-
-        return dataset_tensor
-
-    def set_tensorflow_datasets(self):
-
-        batch_size_train = self.parameters.training_parameters['batch_size']
-        self.datasets.dataset_train = self.create_dataset_pipeline(self.datasets.data_train,is_train=True,
-                                                                   batch_size=batch_size_train)
-        self.datasets.dataset_cv = self.create_dataset_pipeline(self.datasets.data_cv,is_train=False,batch_size=1)
-        self.datasets.dataset_test = self.preprocess_data(self.datasets.data_test[0],self.datasets.data_test[1])
-
+        
     def generate_augmented_data(self, transformations, augmented_dataset_size=1):
 
         # Set storage folder for augmented dataset
@@ -218,9 +131,30 @@ class CGenTrainer:
         data_augmenter.transform_images()
         data_augmenter.export_augmented_dataset()
 
+    def contour_generation(self):
+
+        if self.model.imported == False:
+            self.singletraining()
+
+        ## GENERATE NEW DATA - SAMPLING ##
+        X_samples = self.generate_samples()
+
+        # Show the sampled images
+        n_samples = X_samples.shape[0]
+        width, height = self.parameters.img_size
+        plt.figure()
+        for i in range(n_samples):
+            ax = plt.subplot(n_samples//5 + 1,5,i+1)
+            plt.imshow(X_samples[i,:].reshape((width,height)), cmap='gray')
+            ax.axis('off')
+        #plt.show()
+        plt.savefig(os.path.join(self.case_dir,'Results','generated_samples.png'), dpi=100)
+        plt.close()
+
     def train_model(self, sens_var=None):
 
         # Parameters
+        case_ID = self.parameters.analysis['case_ID']
         input_dim = self.parameters.img_size
         latent_dim = self.parameters.training_parameters['latent_dim']
         alpha = self.parameters.training_parameters['learning_rate']
@@ -231,68 +165,65 @@ class CGenTrainer:
         dropout = self.parameters.training_parameters['dropout']
 
         if self.model.imported == False:
-            pretrained_model = None
-        else:
-            pretrained_model = self.model.Model
+            if sens_var == None:  # If it is a one-time training
+                self.model.Model = models.VAE(input_dim,latent_dim,alpha,l2_reg,l1_reg,dropout,mode='train',model='mixed')
+                self.model.History = self.model.Model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
+                                                          validation_data=self.datasets.dataset_cv,validation_steps=None)
+                '''
+                ## TRAIN ##
+                n_samples = 10
+                width, height = self.parameters.img_size
+                ## PLOT GENERATED TRAINING DATA ##
+                fig, ax = plt.subplots(5,2,sharex=True,figsize=(10,10))
+                for fid_idx, (data, title) in enumerate(
+                        zip([self.datasets.data_train[0],self.datasets.data_test[0]], ['Train','Test'])):
+                    ii = 0
+                    for i in range(n_samples//2):
+                        for j in range(2):
+                            x_dec = self.model.Model.predict(data[ii,:].reshape((1,height*width)))
+                            x_dec = np.reshape(x_dec,(width,height))
+                            ax[i,j].imshow(x_dec,cmap='Greys_r')
+                            fig_set = fig.add_subplot(5,2,fid_idx + 1)
+                            fig_set.set_title(title)
+                            fig_set.axis('off')
+                            ii += 1
+                #plt.show()
+                plt.savefig(os.path.join(self.case_dir,'Results','training_samples.png'),dpi=100)
+                '''
 
-        if sens_var == None:  # If it is a one-time training
-            self.model.Model = models.VAE(input_dim,latent_dim,alpha,l2_reg,l1_reg,dropout,mode='train',model='mixed')
-            self.model.History = self.model.Model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                      validation_data=self.datasets.dataset_cv,validation_steps=None)
-            '''
-            ## TRAIN ##
-            n_samples = 10
-            width, height = self.parameters.img_size
-            ## PLOT GENERATED TRAINING DATA ##
-            fig, ax = plt.subplots(5,2,sharex=True,figsize=(10,10))
-            for fid_idx, (data, title) in enumerate(
-                    zip([self.datasets.data_train[0],self.datasets.data_test[0]], ['Train','Test'])):
-                ii = 0
-                for i in range(n_samples//2):
-                    for j in range(2):
-                        x_dec = self.model.Model.predict(data[ii,:].reshape((1,height*width)))
-                        x_dec = np.reshape(x_dec,(width,height))
-                        ax[i,j].imshow(x_dec,cmap='Greys_r')
-                        fig_set = fig.add_subplot(5,2,fid_idx + 1)
-                        fig_set.set_title(title)
-                        fig_set.axis('off')
-                        ii += 1
-            #plt.show()
-            plt.savefig(os.path.join(self.case_dir,'Results','training_samples.png'),dpi=100)
-            '''
+            else: # If it is a sensitivity analysis
+                self.model.Model = []
+                self.model.History = []
+                if type(alpha) == list:
+                    for learning_rate in alpha:
+                        if self.model.imported == False:
+                            model = models.VAE(input_dim,latent_dim,learning_rate,l2_reg,l1_reg,dropout,mode='train',
+                                               model='mixed')
+                        self.model.Model.append(model)
+                        self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
+                                                            validation_data=self.datasets.dataset_cv,validation_steps=None))
 
-        else: # If it is a sensitivity analysis
-            self.model.Model = []
-            self.model.History = []
-            if type(alpha) == list:
-                for learning_rate in alpha:
-                    if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,learning_rate,l2_reg,l1_reg,dropout,mode='train')
-                    self.model.Model.append(model)
-                    self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                              validation_data=self.datasets.dataset_cv,validation_steps=None))
-
-            elif type(l2_reg) == list:
-                for regularizer in l2_reg:
-                    if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,alpha,regularizer,l1_reg,dropout,mode='train')
-                    self.model.Model.append(model)
-                    self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
-            elif type(l1_reg) == list:
-                for regularizer in l1_reg:
-                    if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,alpha,l2_reg,regularizer,dropout,mode='train')
-                    self.model.Model.append(model)
-                    self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
-            elif type(dropout) == list:
-                for rate in dropout:
-                    if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,alpha,l2_reg,l1_reg,rate,mode='train')
-                    self.model.Model.append(model)
-                    self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
+                elif type(l2_reg) == list:
+                    for regularizer in l2_reg:
+                        if self.model.imported == False:
+                            model = models.VAE(input_dim,latent_dim,alpha,regularizer,l1_reg,dropout,mode='train',model='mixed')
+                        self.model.Model.append(model)
+                        self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
+                                                            validation_data=self.datasets.dataset_cv,validation_steps=None))
+                elif type(l1_reg) == list:
+                    for regularizer in l1_reg:
+                        if self.model.imported == False:
+                            model = models.VAE(input_dim,latent_dim,alpha,l2_reg,regularizer,dropout,mode='train',model='mixed')
+                        self.model.Model.append(model)
+                        self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
+                                                            validation_data=self.datasets.dataset_cv,validation_steps=None))
+                elif type(dropout) == list:
+                    for rate in dropout:
+                        if self.model.imported == False:
+                            model = models.VAE(input_dim,latent_dim,alpha,l2_reg,l1_reg,rate,mode='train',model='mixed')
+                        self.model.Model.append(model)
+                        self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
+                                                            validation_data=self.datasets.dataset_cv,validation_steps=None))
 
 
     def generate_samples(self):
@@ -355,6 +286,7 @@ class CGenTrainer:
                 ax.set_ylabel('Loss',size=12)
                 ax.tick_params('both',labelsize=10)
                 ax.legend()
+                plt.suptitle('Loss evolution case = {}'.format(str(case_ID)))
 
                 if sens_var:
                     storage_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model_performance',
@@ -364,7 +296,7 @@ class CGenTrainer:
                 if os.path.exists(storage_dir):
                     rmtree(storage_dir)
                 os.makedirs(storage_dir)
-                fig.savefig(os.path.join(storage_dir,'Loss_evolution.png'),dpi=200)
+                fig.savefig(os.path.join(storage_dir,'Loss_evolution_{}.png'.format(str(case_ID))),dpi=200)
                 plt.close()
 
                 # Metrics #
@@ -395,33 +327,51 @@ class CGenTrainer:
         case_ID = self.parameters.analysis['case_ID']
         for i in range(N):
             if sens_var:
-                weights_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model','{}={:.3f}'.format(sens_var[0],sens_var[1][i]))
+                storage_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model','{}={:.3f}'.format(sens_var[0],sens_var[1][i]))
             else:
-                weights_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model_{}')
-            if os.path.exists(weights_dir):
-                rmtree(weights_dir)
-            os.makedirs(weights_dir)
+                storage_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model')
+            if os.path.exists(storage_dir):
+                rmtree(storage_dir)
+            os.makedirs(storage_dir)
 
-            # Export model arquitecture to JSON file
-            model_json = model[i].to_json()
-            with open(os.path.join(weights_dir,'CGAE_model_arquitecture.json'),'w') as json_file:
-                json_file.write(model_json)
+            # Export history training
+            with open(os.path.join(storage_dir,'History'),'wb') as f:
+                pickle.dump(self.model.History.history,f)
 
-            # Export model weights to HDF5 file
-            model[i].save_weights(os.path.join(weights_dir,'CGAE_model_weights.h5'))
+            # Save model
+            model[i].save(os.path.join(storage_dir,'CGAE_model_{}'.format(str(case_ID))))
 
     def reconstruct_model(self):
 
-        weights_dir = os.path.join(self.case_dir,'Results','pretrained_Model')
-        # Load JSON file
-        json_file = open(os.path.join(weights_dir,'CGAE_model_arquitecture.json'),'r')
-        loaded_model_json = json_file.read()
-        json_file.close()
+        # Enable eager execution
+        tf.config.run_functions_eagerly(True)
 
-        # Build model
-        self.model.Model = tf.keras.models.model_from_json(loaded_model_json)
-        # Load weights into new model
-        self.model.Model.load_weights(os.path.join(weights_dir,'CGAE_model_weights.h5'))
+        storage_dir = os.path.join(self.case_dir,'Results','pretrained_model')
+        # Load model from folder
+        try:
+            model_folder = next(os.walk(storage_dir))[1][0]
+        except RuntimeError:
+            print('There is no model stored in the folder')
+
+        alpha = self.parameters.training_parameters['learning_rate']
+        loss = models.loss_function
+
+        self.model.Model = tf.keras.models.load_model(os.path.join(storage_dir,model_folder),
+                                                      custom_objects={'loss':loss},compile=False)
+        self.model.Model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=alpha),loss=lambda x, y: loss,
+                                 metrics=[tf.keras.metrics.MeanSquaredError()])
+
+        # Disable eager execution
+        tf.config.run_functions_eagerly(False)
+
+        # Reconstruct history
+        class history_container:
+            pass
+        self.model.History = history_container()
+        with open(os.path.join(storage_dir,'History'),'rb') as f:
+            self.model.History.history = pickle.load(f)
+        self.model.History.epoch = np.arange(0,len(self.model.History.history['loss']))
+        self.model.History.model = self.model.Model
 
     def export_nn_log(self):
 
@@ -441,8 +391,8 @@ class CGenTrainer:
         analysis['CASE ID'] = self.parameters.analysis['case_ID']
         analysis['ANALYSIS'] = self.parameters.analysis['type']
         analysis['IMPORTED MODEL'] = self.parameters.analysis['import']
-        analysis['LAST TRAINING LOSS'] = self.model.History.history['loss'][-1]
-        analysis['LAST CV LOSS'] = self.model.History.history['val_loss'][-1]
+        analysis['LAST TRAINING LOSS'] = '{:.3f}'.format(self.model.History.history['loss'][-1])
+        analysis['LAST CV LOSS'] = '{:.3f}'.format(self.model.History.history['val_loss'][-1])
 
         architecture = OrderedDict()
         architecture['NUMBER OF INPUTS'] = len(self.model.Model.inputs),
@@ -453,6 +403,9 @@ class CGenTrainer:
 
         case_ID = self.parameters.analysis['case_ID']
         storage_folder = os.path.join(self.case_dir,'Results',str(case_ID))
+        if os.path.exists(storage_folder):
+            rmtree(storage_folder)
+        os.makedirs(storage_folder)
         with open(os.path.join(storage_folder,'CGAE.log'),'w') as f:
             f.write('CGAE log file\n')
             f.write('==========\n')
