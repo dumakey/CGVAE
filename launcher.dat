@@ -2,28 +2,39 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Case folders %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-DATADIR=C:\Users\juan.ramos\Contour_generator\Datasets_training
+DATADIR=C:\Users\juan.ramos\Contour_generator
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Analysis %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-TYPEANALYSIS=SINGLETRAINING   % SINGLETRAINING, SENSANALYSIS 
+TYPEANALYSIS=SENSANALYSIS   % SINGLETRAINING, SENSANALYSIS, GENERATE, DATAGEN, PLOTACTIVATIONS
 IMPORTMODEL=0
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Training parameters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Training parameters
 TRAINSIZE=0.75
-LEARNINGRATE=0.005
+LEARNINGRATE=0.008
 L2REG=NONE
 L1REG=NONE
-DROPOUT=NONE
-EPOCHS=20
+DROPOUT=0.1
+EPOCHS=1
 BATCHSIZE=32
 LATENTDIM=25
+ENCHIDDENDIM=(500)
+DECHIDDENDIM=(500)
+ARCHITECTURE=FLAT  # FLAT, CNN, MIXED
+ACTIVATION=LEAKYRELU, RELU  # NONE, RELU, ELU, LEAKYRELU, SWISH, SIGMOID, TANH
+# When sensitivity analysis, indicate activations separated by commas --> ACTIVATION=RELU,SWISH
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Dataset Augmentation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+AUGDATA=1
+AUGDATASIZE=0.5
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Image processing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-IMAGERESIZE=(50,50)  % (width, height)
+IMAGERESIZE=(100,70)  % (width, height)
+
 % Rotation
 ROTATION=1
 ROTATIONCENTER=(NONE,NONE)
@@ -43,5 +54,15 @@ FILTERPARAM=(SIZE,5,SIGMA,3)
 FLIP=0
 FLIPTYPE=HORIZONTAL
 FLIPTYPE=VERTICAL
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Samples generation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+NSAMPLESGEN=10
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Activation plotting %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+NCOLS=3
+ROWS2COLS=1
+NSAMPLESACT=1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

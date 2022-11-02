@@ -49,53 +49,61 @@ def loss_function(x, x_decoded, t_mean, t_log_var):
     return tf.reduce_mean(-loss + regularisation, axis=0)
 
 def conv2D_block(X, num_channels, f, p, s, dropout, **kwargs):
+
     if kwargs:
         parameters = list(kwargs.values())[0]
         l2_reg = parameters['l2_reg']
         l1_reg = parameters['l1_reg']
-        act_fun = parameters['act_fun']
+        activation = parameters['activation']
     else:
         l2_reg = 0.0
         l1_reg = 0.0
-        act_fun = 'relu'
+        activation = 'relu'
 
     if p != 0:
         net = tf.keras.layers.ZeroPadding2D(p)(X)
     else:
         net = X
-    net = tf.keras.layers.Conv2D(num_channels, kernel_size=f, strides=s, padding='valid',
-                        kernel_regularizer=tf.keras.regularizers.l2(l2_reg))(net)
+    net = tf.keras.layers.Conv2D(num_channels,kernel_size=f,strides=s,padding='valid',
+                                 kernel_regularizer=tf.keras.regularizers.l2(l2_reg))(net)
     net = tf.keras.layers.BatchNormalization()(net)
     
-    if act_fun == 'leaky':
+    if activation == 'leakyrelu':
         net = tf.keras.layers.LeakyReLU(rate)(net)
-    elif act_fun == 'linear':
-        net = tf.keras.layers.Activation('linear')(net)
-    elif act_fun == 'swish':
+    elif activation == 'swish':
         net = tf.keras.layers.Activation('swish')(net)
+    elif activation == 'elu':
+        net = tf.keras.layers.ELU(net)
+    elif activation == 'tanh':
+        net = tf.keras.activations.tanh(net)
+    elif activation == 'sigmoid':
+        net = tf.keras.activations.sigmoid(net)
+    elif activation == 'linear':
+        net = tf.keras.activations('linear')(net)
     else:
         net = tf.keras.layers.Activation('relu')(net)
 
     return net
 
-def encoder_lenet(input_dim, latent_dim, hidden_dim, l2_reg=0.0, l1_reg=0.0, dropout=0.0, activation='relu'):
+def encoder_lenet(input_dim, latent_dim, hidden_layers, l2_reg=0.0, l1_reg=0.0, dropout=0.0, activation='relu'):
 
     in_shape = (input_dim[1],input_dim[0])
     input_shape = tuple(list(in_shape) + [1])
     X_input = tf.keras.layers.Input(shape=(np.prod(input_shape),))
     net = tf.keras.layers.Reshape(input_shape)(X_input)
     net = conv2D_block(net,num_channels=6,f=5,p=0,s=1,dropout=dropout,kwargs={'l2_reg':l2_reg,'l1_reg':l1_reg,
-                                                                               'act_fun':activation})
+                                                                               'activation':activation})
     net = tf.keras.layers.AvgPool2D(pool_size=2,strides=2)(net)
     net = conv2D_block(net,num_channels=16,f=5,p=0,s=1,dropout=dropout,kwargs={'l2_reg':l2_reg,'l1_reg':l1_reg,
-                                                                                'act_fun':activation})
+                                                                                'activation':activation})
     net = tf.keras.layers.AvgPool2D(pool_size=2,strides=2)(net)
     net = tf.keras.layers.Flatten()(net)
     net = tf.keras.layers.Dropout(dropout)(net)
-    net = tf.keras.layers.Dense(units=hidden_dim,activation=None,kernel_regularizer=tf.keras.regularizers.l2(l2_reg))(net)
-    net = tf.keras.layers.BatchNormalization()(net)
-    net = tf.keras.layers.Activation(activation)(net)
-    net = tf.keras.layers.Dropout(dropout)(net)
+    for layer in hidden_layers:
+        net = tf.keras.layers.Dense(units=layer,activation=None,kernel_regularizer=tf.keras.regularizers.l2(l2_reg))(net)
+        net = tf.keras.layers.BatchNormalization()(net)
+        net = tf.keras.layers.Activation(activation)(net)
+        net = tf.keras.layers.Dropout(dropout)(net)
     net = tf.keras.layers.Dense(units=2*latent_dim,activation=None,kernel_regularizer=tf.keras.regularizers.l2(l2_reg))(net)
     net = tf.keras.layers.BatchNormalization()(net)
     net = tf.keras.layers.Activation(activation)(net)
@@ -104,27 +112,28 @@ def encoder_lenet(input_dim, latent_dim, hidden_dim, l2_reg=0.0, l1_reg=0.0, dro
     
     return encoder
 
-def decoder_lenet(output_dim, latent_dim, hidden_dim, l2_reg=0.0, l1_reg=0.0, dropout=0.0, activation='relu'):
+def decoder_lenet(output_dim, latent_dim, hidden_layers, l2_reg=0.0, l1_reg=0.0, dropout=0.0, activation='relu'):
 
     out_shape = np.prod(output_dim)
-    adap_dim = int(np.sqrt(hidden_dim))
+    adap_dim = int(np.sqrt(hidden_layers))
     adap_layer_shape = tuple(list((adap_dim,adap_dim)) + [1])
 
     X_input = tf.keras.layers.Input(shape=latent_dim)
-    net = tf.keras.layers.Dense(units=hidden_dim,activation=None,kernel_regularizer=tf.keras.regularizers.l2(l2_reg))(X_input)
-    net = tf.keras.layers.BatchNormalization()(net)
-    net = tf.keras.layers.Activation(activation)(net)
-    net = tf.keras.layers.Dropout(dropout)(net)
+    for layer in hidden_layers:
+        net = tf.keras.layers.Dense(units=layer,activation=None,kernel_regularizer=tf.keras.regularizers.l2(l2_reg))(X_input)
+        net = tf.keras.layers.BatchNormalization()(net)
+        net = tf.keras.layers.Activation(activation)(net)
+        net = tf.keras.layers.Dropout(dropout)(net)
     net = tf.keras.layers.Dense(units=adap_dim**2,activation=None,kernel_regularizer=tf.keras.regularizers.l2(l2_reg))(net)
     net = tf.keras.layers.BatchNormalization()(net)
     net = tf.keras.layers.Activation(activation)(net)
     net = tf.keras.layers.Dropout(dropout)(net)
     net = tf.keras.layers.Reshape(adap_layer_shape)(net)
     net = conv2D_block(net,num_channels=6,f=5,p=0,s=1,dropout=dropout,kwargs={'l2_reg':l2_reg,'l1_reg':l1_reg,
-                                                                                  'act_fun':activation})
+                                                                                  'activation':activation})
     net = tf.keras.layers.AvgPool2D(pool_size=2,strides=2)(net)
     net = conv2D_block(net,num_channels=16,f=5,p=0,s=1,dropout=dropout,kwargs={'l2_reg':l2_reg,'l1_reg':l1_reg,
-                                                                                   'act_fun':activation})
+                                                                                   'activation':activation})
     net = tf.keras.layers.AvgPool2D(pool_size=2,strides=2)(net)
     net = tf.keras.layers.Flatten()(net)
     net = tf.keras.layers.Dropout(dropout)(net)
@@ -147,8 +156,12 @@ def encoder(input_dim, hidden_dim, latent_dim, activation):
     for hidden_layer_dim in hidden_dim:
         encoder.add(tf.keras.layers.Dense(hidden_layer_dim, activation=None))
         encoder.add(tf.keras.layers.BatchNormalization())
-        encoder.add(tf.keras.layers.Activation(activation))
-    encoder.add(tf.keras.layers.Dense(2 * latent_dim))
+        if activation == 'leakyrelu':
+            rate = 0.3
+            encoder.add(tf.keras.layers.LeakyReLU(rate))
+        else:
+            encoder.add(tf.keras.layers.Activation(activation))
+    encoder.add(tf.keras.layers.Dense(2*latent_dim))
 
     return encoder
     
@@ -164,32 +177,30 @@ def decoder(latent_dim, hidden_dim, output_dim, activation):
     for hidden_layer_dim in hidden_dim:
         decoder.add(tf.keras.layers.Dense(hidden_layer_dim, activation=None))
         decoder.add(tf.keras.layers.BatchNormalization())
-        decoder.add(tf.keras.layers.Activation(activation))
+        if activation == 'leakyrelu':
+            rate = 0.3
+            decoder.add(tf.keras.layers.LeakyReLU(rate))
+        else:
+            decoder.add(tf.keras.layers.Activation(activation))
     decoder.add(tf.keras.layers.Dense(output_dim, activation='sigmoid'))
     
     return decoder
 
-def VAE(input_dim, latent_dim, alpha, l2_reg=0.0, l1_reg=0.0, dropout=0.0, mode='train', model='flat'):
+def VAE(input_dim, latent_dim, encoder_hidden_layers, decoder_hidden_layers, alpha, l2_reg=0.0, l1_reg=0.0, dropout=0.0,
+        activation='relu', mode='train', architecture='flat'):
 
     #input_shape = input_dim[-1]
     in_shape_unrolled = np.prod(input_dim)
 
-    encoder_hidden_layers = [500,500]
-    encoder_hidden_layers = 500
-    decoder_hidden_layers = [500,500]
-    decoder_hidden_layers = [500]
-
-    act_fun = 'swish'
-
-    if model == 'flat':
-        e = encoder(in_shape_unrolled,encoder_hidden_layers,latent_dim,act_fun)
-        d = decoder(latent_dim,decoder_hidden_layers,in_shape_unrolled,act_fun)
-    elif model == 'CNN':
-        e = encoder_lenet(input_dim,latent_dim,encoder_hidden_layers,l2_reg,l1_reg,dropout,act_fun)
-        d = decoder_lenet(input_dim,latent_dim,decoder_hidden_layers,l2_reg,l1_reg,dropout,act_fun)
-    elif model == 'mixed':
-        e = encoder_lenet(input_dim,latent_dim,encoder_hidden_layers,l2_reg,l1_reg,dropout,act_fun)
-        d = decoder(latent_dim,decoder_hidden_layers,in_shape_unrolled,act_fun)
+    if architecture == 'flat':
+        e = encoder(in_shape_unrolled,encoder_hidden_layers,latent_dim,activation)
+        d = decoder(latent_dim,decoder_hidden_layers,in_shape_unrolled,activation)
+    elif architecture == 'cnn':
+        e = encoder_lenet(input_dim,latent_dim,encoder_hidden_layers,l2_reg,l1_reg,dropout,activation)
+        d = decoder_lenet(input_dim,latent_dim,decoder_hidden_layers,l2_reg,l1_reg,dropout,activation)
+    elif architecture == 'mixed':
+        e = encoder_lenet(input_dim,latent_dim,encoder_hidden_layers,l2_reg,l1_reg,dropout,activation)
+        d = decoder(latent_dim,decoder_hidden_layers,in_shape_unrolled,activation)
 
     ## DEFINE MODEL ##
     if mode == 'train':
@@ -212,7 +223,7 @@ def VAE(input_dim, latent_dim, alpha, l2_reg=0.0, l1_reg=0.0, dropout=0.0, mode=
         t = tf.keras.Input(shape=(latent_dim,))
         t_mean = tf.zeros_like(t)
         t_log_var = tf.zeros_like(t)
-        d = decoder(latent_dim,decoder_hidden_layers,input_dim,act_fun)
+        d = decoder(latent_dim,decoder_hidden_layers,input_dim,activation)
         x_decoded = d(t)
 
         # Declare inputs/outputs for the model
@@ -222,9 +233,7 @@ def VAE(input_dim, latent_dim, alpha, l2_reg=0.0, l1_reg=0.0, dropout=0.0, mode=
 
     loss = loss_function(x,x_decoded,t_mean,t_log_var)
     model = tf.keras.Model(input,output)
-    model.summary()
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=alpha),loss=lambda x,y: loss,
                   metrics=[tf.keras.metrics.MeanSquaredError()])
 
     return model
-

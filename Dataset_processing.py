@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from Preprocessing import ImageTransformer
  
 
-def preprocess_data(im_tilde, im):
+def preprocess_tf_data(im_tilde, im):
 
     im_tilde_tf = tf.cast(im_tilde,tf.float32)
     im_tilde_tf = im_tilde_tf/255
@@ -16,6 +16,16 @@ def preprocess_data(im_tilde, im):
     im_tf = im_tf/255
 
     return im_tilde_tf, im_tf
+
+def preprocess_data(im_tilde, im):
+
+    im_tilde = im_tilde.astype(np.float32)
+    im_tilde = im_tilde/255
+
+    im = im.astype(np.float32)
+    im = im/255
+
+    return im_tilde, im
 
 def read_dataset(case_folder, dataset_folder='Training', format='png'):
 
@@ -71,7 +81,7 @@ def create_dataset_pipeline(dataset, is_train=True, num_threads=8, prefetch_buff
 
     if is_train:
         dataset_tensor = dataset_tensor.shuffle(buffer_size=dataset[0].shape[0]).repeat()
-    dataset_tensor = dataset_tensor.map(preprocess_data,num_parallel_calls=num_threads)
+    dataset_tensor = dataset_tensor.map(preprocess_tf_data,num_parallel_calls=num_threads)
     dataset_tensor = dataset_tensor.batch(batch_size)
     dataset_tensor = dataset_tensor.prefetch(prefetch_buffer)
 
