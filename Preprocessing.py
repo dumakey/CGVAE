@@ -110,7 +110,6 @@ class ImageTransformer:
 
     def flip(self, image, axis):
 
-        flipped_image = np.zeros_like(image)
         if axis == 'horizontal':
             flipped_image = np.flip(image,axis=0)
         elif axis == 'vertical':

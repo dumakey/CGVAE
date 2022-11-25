@@ -8,49 +8,76 @@ import Dataset_processing as Dataprocess
 import tensorflow as tf
 
 
-def plot_generated_samples(dataset, img_size, storage_dir):
+def plot_generated_samples(datasets, img_size, storage_dir):
 
     width, height = img_size
-    n_samples = dataset.shape[0]
+    n_datasets = len(datasets)
+    n_rows = 10
 
-    ## PLOT GENERATED TRAINING DATA ##
-    fig, ax = plt.subplots(n_samples,sharex=True,figsize=(10,10))
-    ax[0].title.set_text('Generated')
-    for i,x in enumerate(dataset):
-        x = np.reshape(x,(height,width))*255  # Un-scale image
-        x = x.astype('uint8')
-        _, x = cv.threshold(x,50,255,cv.THRESH_BINARY)
-        # x_dec = cv.bitwise_not(x_dec)
-        ax[i].imshow(x,cmap='Greys_r')
-        fig_set = fig.add_subplot(n_samples,2,i+1)
-        fig_set.axis('off')
-    plt.savefig(os.path.join(storage_dir,'Generated_samples.png'), dpi=100)
-    plt.close()
+    for k,dataset in enumerate(datasets):
+        n_samples = dataset.shape[0]
+        n_samples_r = n_samples
+        n_figs = n_samples//n_rows
+        for j in range(n_figs):
+            n_plots = min(n_samples_r,n_rows)
+            fig, ax = plt.subplots(n_plots,sharex=True,figsize=(20,20))
+            ax[0].title.set_text('Generated')
+            for i in range(n_plots):
+                x = np.reshape(dataset[i],(height,width))*255  # Un-scale image
+                x = x.astype('uint8')
+                _, x = cv.threshold(x,50,255,cv.THRESH_BINARY)
+                # x_dec = cv.bitwise_not(x_dec)
+                ax[i].imshow(x,cmap='Greys_r')
+                fig_set = fig.add_subplot(n_samples,2,i+1)
+                fig_set.axis('off')
+            if n_figs > 1:
+                if n_datasets == 1:
+                    plt.savefig(os.path.join(storage_dir,'Generated_samples_{}.png'.format(j+1)), dpi=100)
+                else:
+                    plt.savefig(os.path.join(storage_dir,'Dataset_{}_generated_samples_{}.png'.format(k+1,j+1)), dpi=100)
+            else:
+                if n_datasets == 1:
+                    plt.savefig(os.path.join(storage_dir,'Generated_samples.png'), dpi=100)
+                else:
+                    plt.savefig(os.path.join(storage_dir,'Dataset_{}_generated_samples.png'.format(k+1)), dpi=100)
+            plt.close()
+            n_samples_r -= n_rows
 
 def plot_dataset_samples(dataset, predictor, n_samples, img_size, storage_dir, stage='Train'):
 
     data_p, _ = Dataprocess.preprocess_data(dataset[0],dataset[1])
     width, height = img_size
-    ## PLOT GENERATED TRAINING DATA ##
-    fig, ax = plt.subplots(n_samples,2,sharex=True,figsize=(20,20))
     m = dataset[0].shape[0]
-    ax[0,0].title.set_text(stage)
-    ax[0,1].title.set_text('Predicted')
-    for ii in range(n_samples):
-        i = randint(0,m-1)
-        x_dec = predictor(data_p[i,:].reshape((1,height*width)))
-        x_dec = np.reshape(x_dec,(height,width))*255  # Un-scale image
-        x_dec = x_dec.astype('uint8')
-        _, x_dec = cv.threshold(x_dec,50,255,cv.THRESH_BINARY)
-        # x_dec = cv.bitwise_not(x_dec)
-        x = dataset[0][i].reshape((height,width))
-        # x = cv.bitwise_not(x)
-        ax[ii,0].imshow(x_dec,cmap='Greys_r')
-        ax[ii,1].imshow(x,cmap='Greys_r')
-        fig_set = fig.add_subplot(n_samples,2,ii+1)
-        fig_set.axis('off')
-    plt.savefig(os.path.join(storage_dir,stage+'_'+'training_samples.png'), dpi=100)
-    plt.close()
+    
+    ## PLOT GENERATED TRAINING DATA ##
+    n_rows = 10
+    n_samples_r = n_samples
+    n_figs = n_samples//n_rows
+    for j in range(n_figs):
+        n_plots = min(n_samples_r,n_rows)
+        fig, ax = plt.subplots(n_plots,2,sharex=True,figsize=(20,20))
+        ax[0,0].title.set_text('Predicted')
+        ax[0,1].title.set_text(stage)
+        for ii in range(n_plots):
+            i = randint(0,m-1)
+            x_dec = predictor(data_p[i,:].reshape((1,height*width)))
+            x_dec = np.reshape(x_dec,(height,width))*255  # Un-scale image
+            x_dec = x_dec.astype('uint8')
+            _, x_dec = cv.threshold(x_dec,50,255,cv.THRESH_BINARY)
+            # x_dec = cv.bitwise_not(x_dec)
+            x = dataset[0][i].reshape((height,width))
+            # x = cv.bitwise_not(x)
+            ax[ii,0].imshow(x_dec,cmap='Greys_r')
+            ax[ii,1].imshow(x,cmap='Greys_r')
+            fig_set = fig.add_subplot(n_samples,2,ii+1)
+            fig_set.axis('off')
+        if n_figs > 1:
+            plt.savefig(os.path.join(storage_dir,stage+'_'+'training_samples_{}.png'.format(j+1)), dpi=100)
+        else:
+            plt.savefig(os.path.join(storage_dir,stage+'_'+'training_samples.png'), dpi=100)
+        plt.close()
+        n_samples_r -= n_rows
+
 
 def monitor_hidden_layers(img, model, case_dir, figs_per_row=5, rows_to_cols_ratio=1, idx=None):
 

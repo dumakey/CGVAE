@@ -6,7 +6,7 @@ DATADIR=C:\Users\juan.ramos\Contour_generator
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Analysis %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-TYPEANALYSIS=SENSANALYSIS   % SINGLETRAINING, SENSANALYSIS, GENERATE, DATAGEN, PLOTACTIVATIONS
+TYPEANALYSIS=SINGLETRAINING   % SINGLETRAINING, SENSANALYSIS, GENERATE, DATAGEN, PLOTACTIVATIONS
 IMPORTMODEL=0
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Training parameters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -14,34 +14,34 @@ IMPORTMODEL=0
 % Training parameters
 TRAINSIZE=0.75
 LEARNINGRATE=0.008
-L2REG=NONE
-L1REG=NONE
-DROPOUT=0.1
-EPOCHS=1
+L2REG=0.1
+L1REG=0.05
+DROPOUT=0.0
+EPOCHS=60
 BATCHSIZE=32
 LATENTDIM=25
-ENCHIDDENDIM=(500)
-DECHIDDENDIM=(500)
-ARCHITECTURE=FLAT  # FLAT, CNN, MIXED
-ACTIVATION=LEAKYRELU, RELU  # NONE, RELU, ELU, LEAKYRELU, SWISH, SIGMOID, TANH
-# When sensitivity analysis, indicate activations separated by commas --> ACTIVATION=RELU,SWISH
+ENCHIDDENDIM=(10)
+DECHIDDENDIM=(10)
+ARCHITECTURE=MIXED  # FLAT, CNN, MIXED
+ACTIVATION=SWISH  # NONE, RELU, ELU, LEAKYRELU, SWISH, SIGMOID, TANH
+% When sensitivity analysis, indicate activations separated by commas --> ACTIVATION=RELU,SWISH
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Dataset Augmentation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 AUGDATA=1
-AUGDATASIZE=0.5
+AUGDATASIZE=1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Image processing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-IMAGERESIZE=(100,70)  % (width, height)
+IMAGERESIZE=(200,150)  % (width, height)
 
 % Rotation
-ROTATION=1
+ROTATION=0
 ROTATIONCENTER=(NONE,NONE)
 ROTATIONANGLE=15
 % Zoom
 ZOOM=0
-ZOOMFACTOR=1.5
+ZOOMFACTOR=1.3
 % Translation
 TRANSLATION=0
 TRANSLATIONDIST=(0,0)
@@ -52,12 +52,12 @@ FILTERPARAM=(SIZE,5,SIGMA,3)
 %FILTERPARAM=(D,20,SIGMACOLOR,5,SIGMASPACE,3)
 % Flip
 FLIP=0
-FLIPTYPE=HORIZONTAL
 FLIPTYPE=VERTICAL
+%FLIPTYPE=HORIZONTAL
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Samples generation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-NSAMPLESGEN=10
+NSAMPLESGEN=30
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Activation plotting %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

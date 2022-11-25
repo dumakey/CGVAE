@@ -4,6 +4,7 @@ from random import randint
 def read_case_setup(launch_filepath):
     file = open(launch_filepath, 'r')
     data = file.read()
+    data = re.sub('%.*\n','', data)
 
     class setup:
         pass
@@ -33,7 +34,7 @@ def read_case_setup(launch_filepath):
     # Type of analysis
     match = re.search('TYPEANALYSIS\s*=\s*(\w+).*', data)
     if match:
-        casedata.analysis['type'] = match.group(1)
+        casedata.analysis['type'] = str.lower(match.group(1))
 
     # Import
     match = re.search('IMPORTMODEL\s*=\s*(\d).*', data)
@@ -129,12 +130,14 @@ def read_case_setup(launch_filepath):
             casedata.training_parameters['batch_size'] = int(match.group(1))
 
     # Activation function
-    match = re.search('ACTIVATION\s*=\s*((\w+)\s*,?\s*(\w+)*)\s*.*', data)
+    match = re.search('ACTIVATION\s*=\s*((\w+)\s*(,?\s*\w+,?)*)\s*.*', data)
     if match:
-        if None in match.groups():
-            casedata.training_parameters['activation'] = str.lower(match.group(2))
-        else:
-            casedata.training_parameters['activation'] = [str.lower(item) for item in match.groups()[1:]]
+        matches = re.findall('(\w+)',match.group(1))
+        if matches:
+            if len(matches) == 1:
+                casedata.training_parameters['activation'] = str.lower(matches[0])
+            else:
+                casedata.training_parameters['activation'] = [str.lower(item) for item in matches]
 
     # NN architecture
     match = re.search('ARCHITECTURE\s*=\s*(\w+).*', data)
@@ -184,14 +187,14 @@ def read_case_setup(launch_filepath):
     if match:
         casedata.img_processing['filter'][0] = int(match.group(1))
         match_type = re.search('FILTERTYPE\s*=\s*(\w+).*', data)
-        casedata.img_processing['filter'][1] = match_type.group(1)
+        casedata.img_processing['filter'][1] = str.lower(match_type.group(1))
         if match_type:
-            if match_type.group(1) == 'GAUSSIAN':
+            if str.lower(match_type.group(1)) == 'gaussian':
                 filter_param = re.search(
                     'FILTERPARAM\s*=\s*\(\s*SIZE\s*\,\s*(\d+|NONE)\s*\,\s*SIGMA\s*\,\s*(\d+|NONE)\s*\).*', data)
                 casedata.img_processing['filter'][2] = int(filter_param.group(1))
                 casedata.img_processing['filter'][3] = int(filter_param.group(2))
-        elif match_type.group(1) == 'BILATERAL':
+        elif str.lower(match_type.group(1)) == 'bilateral':
             filter_param = re.search(
                 'FILTERPARAM\s*=\s*\(\s*(D)\s*\,\s*(\d+|NONE)\s*\,\s*SIGMACOLOR\s*\,\s*(\d+|NONE)\s*SIGMASPACE\s*\,\s*(\d+|NONE)\s*\).*',
                 data)
@@ -205,7 +208,7 @@ def read_case_setup(launch_filepath):
             casedata.img_processing['flip'][0] = int(match.group(1))
             match_type = re.search('FLIPTYPE\s*=\s*(\w+).*', data)
             if match_type:
-                casedata.img_processing['flip'][1] = match_type.group(1)
+                casedata.img_processing['flip'][1] = str.lower(match_type.group(1))
 
     ######################################### Sample generation parameters #############################################
     # Number of samples

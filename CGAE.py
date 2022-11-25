@@ -51,13 +51,15 @@ class CGenTrainer:
 
         # Sensitivity analysis variable identification
         sens_vars = [item for item in self.parameters.training_parameters.items() if
-                     item[0] not in ('enc_hidden_layers', 'dec_hidden_layers') if type(item[1]) == list][0]
-        self.parameters.sens_variable = sens_vars if len(sens_vars) != 0 else None
+                     item[0] not in ('enc_hidden_layers', 'dec_hidden_layers') if type(item[1]) == list]
+        self.parameters.sens_variable = sens_vars[0] if len(sens_vars) != 0 else None
 
         # Check for model reconstruction
         if self.parameters.analysis['import'] == True:
             self.model.imported = True
-            self.model.Model, self.model.History = self.reconstruct_model()
+            model, history = self.reconstruct_model()
+            self.model.Model = [model]
+            self.model.History = [history]
         else:
             self.model.imported = False
 
@@ -70,11 +72,11 @@ class CGenTrainer:
 
         analysis_ID = self.parameters.analysis['type']
         analysis_list = {
-                        'SINGLETRAINING': self.singletraining,
-                        'SENSANALYSIS': self.sensitivity_analysis_on_training,
-                        'GENERATE': self.contour_generation,
-                        'DATAGEN': self.data_generation,
-                        'PLOTACTIVATIONS': self.plot_activations,
+                        'singletraining': self.singletraining,
+                        'sensanalysis': self.sensitivity_analysis_on_training,
+                        'generate': self.contour_generation,
+                        'datagen': self.data_generation,
+                        'plotactivations': self.plot_activations,
                         }
 
         analysis_list[analysis_ID]()
@@ -201,9 +203,10 @@ class CGenTrainer:
 
         if not hasattr(self, 'data_train'):
             data_train, data_cv, data_test = Dataprocess.get_datasets(case_dir,training_size,img_size)
-            Postprocessing.plot_dataset_samples(data_train,self.model.Model.predict,n_samples,img_size,storage_dir,stage='Train')
-            Postprocessing.plot_dataset_samples(data_cv,self.model.Model.predict,n_samples,img_size,storage_dir,stage='Cross-validation')
-            Postprocessing.plot_dataset_samples(data_test,self.model.Model.predict,n_samples,img_size,storage_dir,stage='Test')
+            for model in self.model.Model:
+                Postprocessing.plot_dataset_samples(data_train,model.predict,n_samples,img_size,storage_dir,stage='Train')
+                Postprocessing.plot_dataset_samples(data_cv,model.predict,n_samples,img_size,storage_dir,stage='Cross-validation')
+                Postprocessing.plot_dataset_samples(data_test,model.predict,n_samples,img_size,storage_dir,stage='Test')
 
         ## GENERATE NEW DATA - SAMPLING ##
         X_samples = self.generate_samples()
@@ -226,72 +229,75 @@ class CGenTrainer:
         activation = self.parameters.training_parameters['activation']
         architecture = self.parameters.training_parameters['architecture']
 
+        self.model.Model = []
+        self.model.History = []
+        Model = models.VAE
         if sens_var == None:  # If it is a one-time training
-            self.model.Model = models.VAE(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,l1_reg,
-                                          dropout,activation,mode='train',architecture=architecture)
-            self.model.History = self.model.Model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                      validation_data=self.datasets.dataset_cv,validation_steps=None)
-            n_samples = 5
-            storage_dir = os.path.join(self.case_dir,'Results')
-            Postprocessing.plot_dataset_samples(self.datasets.data_train,self.model.Model.predict,n_samples,input_dim,
-                                                storage_dir,stage='Train')
+            self.model.Model.append(Model(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
+                                               l1_reg,dropout,activation,mode='train',architecture=architecture))
+            self.model.History.append(self.model.Model[-1].fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
+                                                      validation_data=self.datasets.dataset_cv,validation_steps=None,verbose=1))
         else: # If it is a sensitivity analysis
-            self.model.Model = []
-            self.model.History = []
             if type(alpha) == list:
                 for learning_rate in alpha:
                     if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,learning_rate,
+                        model = Model(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,learning_rate,
                                            l2_reg,l1_reg,dropout,activation,mode='train',architecture=architecture)
                     self.model.Model.append(model)
                     self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
+                                                        validation_data=self.datasets.dataset_cv,validation_steps=None,
+                                                        verbose=1))
             elif type(l2_reg) == list:
                 for regularizer in l2_reg:
                     if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,regularizer,
+                        model = Model(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,regularizer,
                                            l1_reg,dropout,activation,mode='train',architecture=architecture)
                     self.model.Model.append(model)
                     self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
+                                                        validation_data=self.datasets.dataset_cv,validation_steps=None,
+                                                        verbose=1))
             elif type(l1_reg) == list:
                 for regularizer in l1_reg:
                     if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
+                        model = Model(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
                                            regularizer,dropout,activation,mode='train',architecture=architecture)
                     self.model.Model.append(model)
                     self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
+                                                        validation_data=self.datasets.dataset_cv,validation_steps=None,
+                                                        verbose=1))
             elif type(dropout) == list:
                 for rate in dropout:
                     if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
+                        model = Model(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
                                            l1_reg,rate,activation,mode='train',architecture=architecture)
                     self.model.Model.append(model)
                     self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
+                                                        validation_data=self.datasets.dataset_cv,validation_steps=None,
+                                                        verbose=1))
             elif type(activation) == list:
                 for act in activation:
                     if self.model.imported == False:
-                        model = models.VAE(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
+                        model = Model(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
                                            l1_reg,dropout,act,mode='train',architecture=architecture)
                     self.model.Model.append(model)
                     self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
+                                                        validation_data=self.datasets.dataset_cv,validation_steps=None,
+                                                        verbose=1))
             elif type(latent_dim) == list:
                 for dim in latent_dim:
                     if self.model.imported == False:
-                        model = models.VAE(input_dim,dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,l1_reg,dropout,
+                        model = Model(input_dim,dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,l1_reg,dropout,
                                            activation,mode='train',architecture=architecture)
                     self.model.Model.append(model)
                     self.model.History.append(model.fit(self.datasets.dataset_train,epochs=nepoch,steps_per_epoch=200,
-                                                        validation_data=self.datasets.dataset_cv,validation_steps=None))
+                                                        validation_data=self.datasets.dataset_cv,validation_steps=None,
+                                                        verbose=1))
 
     def generate_samples(self):
 
         ## BUILD DECODER ##
         n_samples = self.parameters.samples_generation['n_samples']
-        output_dim = self.model.Model.input.shape[1]
+        output_dim = self.parameters.img_size
         latent_dim = self.parameters.training_parameters['latent_dim']
         alpha = self.parameters.training_parameters['learning_rate']
         dec_hidden_layers = self.parameters.training_parameters['dec_hidden_layers']
@@ -299,25 +305,28 @@ class CGenTrainer:
         architecture = self.parameters.training_parameters['architecture']
         decoder = models.VAE(output_dim,latent_dim,[],dec_hidden_layers,alpha,0.0,0.0,0.0,activation,'sample',architecture)  # No regularization
 
-        # Retrieve decoder weights
-        model_weights = self.model.Model.weights
-        j = 0
-        for weight in model_weights:
-            j_layer_shape = weight.get_shape()[0]
-            if j_layer_shape != latent_dim:
-                j += 1
-            else:
-                break
-        decoder_input_layer_idx = j
+        X_samples = []
+        for model in self.model.Model:
+            # Retrieve decoder weights
+            model_weights = model.weights
+            j = 0
+            for weight in model_weights:
+                j_layer_shape = weight.get_shape()[0]
+                if j_layer_shape != latent_dim:
+                    j += 1
+                else:
+                    break
+            decoder_input_layer_idx = j
 
-        decoder_weights = self.model.Model.get_weights()[decoder_input_layer_idx:]
-        decoder.set_weights(decoder_weights)
+            decoder_weights = model.get_weights()[decoder_input_layer_idx:]
+            decoder.set_weights(decoder_weights)
 
-        ## SAMPLE IMAGES ##
-        t = tf.random.normal(shape=(1,latent_dim))
-        X_samples = np.zeros([n_samples,output_dim])
-        for i in range(n_samples):
-            X_samples[i,:] = decoder.predict(t,steps=1)
+            ## SAMPLE IMAGES ##
+            t = tf.random.normal(shape=(1,latent_dim))
+            samples = np.zeros([n_samples,np.prod(output_dim)])
+            for i in range(n_samples):
+                samples[i,:] = decoder.predict(t,steps=1)
+            X_samples.append(samples)
 
         return X_samples
 
@@ -361,12 +370,12 @@ class CGenTrainer:
                         storage_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model_performance',
                                                    '{}={:.3f}'.format(sens_var[0],sens_var[1][i]))
                     loss_plot_filename = 'Loss_evolution_{}_{}={}.png'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
-                    loss_filename = 'Model_loss_{}_{}={}.png'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
+                    loss_filename = 'Model_loss_{}_{}={}.csv'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
                     metrics_filename = 'Model_metrics_{}_{}={}.csv'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
                 else:
                     storage_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model_performance')
                     loss_plot_filename = 'Loss_evolution_{}.png'.format(str(case_ID))
-                    loss_filename = 'Model_loss_{}.png'.format(str(case_ID))
+                    loss_filename = 'Model_loss_{}.csv'.format(str(case_ID))
                     metrics_filename = 'Model_metrics_{}.csv'.format(str(case_ID))
                     
                 if os.path.exists(storage_dir):
@@ -393,13 +402,7 @@ class CGenTrainer:
 
     def export_model(self, sens_var=None):
 
-        if type(self.model.Model) == list:
-            N = len(sens_var[1])
-            model = self.model.Model
-        else:
-            N = 1
-            model = [self.model.Model]
-
+        N = len(self.model.Model)
         case_ID = self.parameters.analysis['case_ID']
         for i in range(N):
             if sens_var:
@@ -428,13 +431,13 @@ class CGenTrainer:
 
             # Save model
             # Export model arquitecture to JSON file
-            model_json = model[i].to_json()
+            model_json = self.model.Model[i].to_json()
             with open(os.path.join(storage_dir,model_json_name),'w') as json_file:
                 json_file.write(model_json)
-            model[i].save(os.path.join(storage_dir,model_folder_name.format(str(case_ID))))
+            self.model.Model[i].save(os.path.join(storage_dir,model_folder_name.format(str(case_ID))))
 
             # Export model weights to HDF5 file
-            model[i].save_weights(os.path.join(storage_dir,model_weights_name))
+            self.model.Model[i].save_weights(os.path.join(storage_dir,model_weights_name))
 
     def reconstruct_model(self, mode='train'):
 
@@ -450,7 +453,8 @@ class CGenTrainer:
             # Load weights into new model
             Model = models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,activation,
                                mode,architecture)
-            Model.load_weights(os.path.join(storage_dir,'CGAE_model_weights.h5'))
+            weights_filename = [file for file in os.listdir(storage_dir) if file.endswith('.h5')][0]
+            Model.load_weights(os.path.join(storage_dir,weights_filename))
             class history_container:
                 pass
             History = history_container()
@@ -526,7 +530,7 @@ class CGenTrainer:
         training['LATENT DIMENSION'] = self.parameters.training_parameters['latent_dim']
         training['OPTIMIZER'] = [model.optimizer._name for model in self.model.Model]
         training['METRICS'] = [model.metrics_names[-1] if model.metrics_names != None else None for model in self.model.Model]
-    
+
         analysis = OrderedDict()
         analysis['CASE ID'] = self.parameters.analysis['case_ID']
         analysis['ANALYSIS'] = self.parameters.analysis['type']
@@ -535,13 +539,7 @@ class CGenTrainer:
         analysis['LAST CV LOSS'] = ['{:.3f}'.format(history.history['val_loss'][-1]) for history in self.model.History]
 
         architecture = OrderedDict()
-        architecture['NUMBER OF INPUTS'] = [len(model.inputs) for model in self.model.Model]
-        architecture['INPUT SHAPE'] = self.datasets.dataset_train.element_spec[0].shape
-        architecture['LAYERS'] = [[layer._name for layer in model.layers] for model in self.model.Model]
-        architecture['TRAINABLE VARIABLES'] = [sum([np.prod(variable.shape) for variable in model.trainable_variables])
-                                               for model in self.model.Model]
-        architecture['NON TRAINABLE VARIABLES'] = [sum([np.prod(variable.shape) for variable in model.non_trainable_variables])
-                                                   for model in self.model.Model]
+        architecture['INPUT SHAPE'] = self.parameters.img_size
 
         case_ID = self.parameters.analysis['case_ID']
         storage_folder = os.path.join(self.case_dir,'Results',str(case_ID))
@@ -553,11 +551,15 @@ class CGenTrainer:
             f.write('==================================================================================================\n')
             f.write('->ANALYSIS\n')
             for item in analysis.items():
-                f.write('>' + item[0] + '=' + str(item[1]) + '\n')
+                f.write(item[0] + '=' + str(item[1]) + '\n')
             f.write('--------------------------------------------------------------------------------------------------\n')
             f.write('->TRAINING\n')
             for item in training.items():
-                f.write('>' + item[0] + '=' + str(item[1]) + '\n')
+                f.write(item[0] + '=' + str(item[1]) + '\n')
+            f.write('--------------------------------------------------------------------------------------------------\n')
+            f.write('->ARCHITECTURE\n')
+            for item in architecture.items():
+                f.write(item[0] + '=' + str(item[1]) + '\n')
             f.write('--------------------------------------------------------------------------------------------------\n')
             f.write('->MODEL\n')
             for model in self.model.Model:
