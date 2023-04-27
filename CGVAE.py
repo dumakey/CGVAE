@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
-from shutil import rmtree
+from shutil import rmtree, copytree
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -15,7 +15,7 @@ disable_eager_execution()
 
 import reader
 import Dataset_processing as Dataprocess
-import DL_models as models
+import Models
 import AugmentationDataset as ADS
 import Postprocessing
 
@@ -74,6 +74,7 @@ class CGenTrainer:
         analysis_list = {
                         'singletraining': self.singletraining,
                         'sensanalysis': self.sensitivity_analysis_on_training,
+                        'traingenerate': self.traingenerate,
                         'generate': self.contour_generation,
                         'datagen': self.data_generation,
                         'plotactivations': self.plot_activations,
@@ -97,9 +98,9 @@ class CGenTrainer:
         Dataprocess.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
         if self.model.imported == False:
             self.train_model(sens_variable)
-        self.export_nn_log()
         self.export_model_performance(sens_variable)
         self.export_model(sens_variable)
+        self.export_nn_log()
 
     def singletraining(self):
 
@@ -114,9 +115,37 @@ class CGenTrainer:
         Dataprocess.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
         if self.model.imported == False:
             self.train_model()
-        self.export_nn_log()
         self.export_model_performance()
         self.export_model()
+        self.export_nn_log()
+    
+    def traingenerate(self):
+    
+        # Training
+        case_dir = self.case_dir
+        training_size = self.parameters.training_parameters['train_size']
+        batch_size = self.parameters.training_parameters['batch_size']
+        img_size = self.parameters.img_size
+
+        self.datasets.data_train, self.datasets.data_cv, self.datasets.data_test = \
+        Dataprocess.get_datasets(case_dir,training_size,img_size)
+        self.datasets.dataset_train, self.datasets.dataset_cv, self.datasets.dataset_test = \
+        Dataprocess.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
+        if self.model.imported == False:
+            self.train_model()
+        self.export_model_performance()
+        self.export_model()
+        self.export_nn_log()
+        
+        # Generation
+        model_dir = os.path.join(case_dir,'Results',str(self.parameters.analysis['case_ID']),'Model')
+        generation_dir = os.path.join(case_dir,'Results','pretrained_model')
+        if os.path.exists(generation_dir):
+            rmtree(generation_dir)
+        copytree(model_dir,generation_dir)
+        self.model.imported = True
+        self.contour_generation()
+        
 
     def data_generation(self):
 
@@ -231,7 +260,7 @@ class CGenTrainer:
 
         self.model.Model = []
         self.model.History = []
-        Model = models.VAE
+        Model = Models.VAE
         if sens_var == None:  # If it is a one-time training
             self.model.Model.append(Model(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
                                                l1_reg,dropout,activation,mode='train',architecture=architecture))
@@ -296,24 +325,23 @@ class CGenTrainer:
     def generate_samples(self):
 
         ## BUILD DECODER ##
+        casedata = reader.read_case_logfile(os.path.join(self.case_dir,'Results','pretrained_model','CGVAE.log'))
         n_samples = self.parameters.samples_generation['n_samples']
-        output_dim = self.parameters.img_size
-        latent_dim = self.parameters.training_parameters['latent_dim']
-        alpha = self.parameters.training_parameters['learning_rate']
-        dec_hidden_layers = self.parameters.training_parameters['dec_hidden_layers']
-        activation = self.parameters.training_parameters['activation']
-        architecture = self.parameters.training_parameters['architecture']
-        decoder = models.VAE(output_dim,latent_dim,[],dec_hidden_layers,alpha,0.0,0.0,0.0,activation,'sample',architecture)  # No regularization
-
+        output_dim = casedata.img_size
+        latent_dim = casedata.training_parameters['latent_dim']
+        alpha = casedata.training_parameters['learning_rate']
+        dec_hidden_layers = casedata.training_parameters['dec_hidden_layers']
+        activation = casedata.training_parameters['activation']
+        architecture = casedata.training_parameters['architecture']
+        decoder = Models.VAE(output_dim,latent_dim,[],dec_hidden_layers,alpha,0.0,0.0,0.0,activation,'sample',architecture)  # No regularization
+        
         X_samples = []
         for model in self.model.Model:
             # Retrieve decoder weights
-            model_weights = model.weights
             j = 0
-            for weight in model_weights:
-                j_layer_shape = weight.get_shape()[0]
-                if j_layer_shape != latent_dim:
-                    j += 1
+            for layer in model.layers:
+                if layer.name.startswith('decoder') == False:
+                    j += len(layer.weights)
                 else:
                     break
             decoder_input_layer_idx = j
@@ -322,9 +350,9 @@ class CGenTrainer:
             decoder.set_weights(decoder_weights)
 
             ## SAMPLE IMAGES ##
-            t = tf.random.normal(shape=(1,latent_dim))
             samples = np.zeros([n_samples,np.prod(output_dim)])
             for i in range(n_samples):
+                t = tf.random.normal(shape=(1,latent_dim))
                 samples[i,:] = decoder.predict(t,steps=1)
             X_samples.append(samples)
 
@@ -412,14 +440,14 @@ class CGenTrainer:
                 else:
                     storage_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model','{}={:.3f}'
                                                .format(sens_var[0],sens_var[1][i]))
-                model_json_name = 'CGAE_model_{}_{}={}_arquitecture.json'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
-                model_weights_name = 'CGAE_model_{}_{}={}_weights.h5'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
-                model_folder_name = 'CGAE_model_{}_{}={}'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
+                model_json_name = 'CGVAE_model_{}_{}={}_arquitecture.json'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
+                model_weights_name = 'CGVAE_model_{}_{}={}_weights.h5'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
+                model_folder_name = 'CGVAE_model_{}_{}={}'.format(str(case_ID),sens_var[0],str(sens_var[1][i]))
             else:
                 storage_dir = os.path.join(self.case_dir,'Results',str(case_ID),'Model')
-                model_json_name = 'CGAE_model_{}_arquitecture.json'.format(str(case_ID))
-                model_weights_name = 'CGAE_model_{}_weights.h5'.format(str(case_ID))
-                model_folder_name = 'CGAE_model_{}'.format(str(case_ID))
+                model_json_name = 'CGVAE_model_{}_arquitecture.json'.format(str(case_ID))
+                model_weights_name = 'CGVAE_model_{}_weights.h5'.format(str(case_ID))
+                model_folder_name = 'CGVAE_model_{}'.format(str(case_ID))
 
             if os.path.exists(storage_dir):
                 rmtree(storage_dir)
@@ -443,21 +471,24 @@ class CGenTrainer:
 
         storage_dir = os.path.join(self.case_dir,'Results','pretrained_model')
         try:
-            img_dim = self.parameters.img_size
-            latent_dim = self.parameters.training_parameters['latent_dim']
-            enc_hidden_layers = self.parameters.training_parameters['enc_hidden_layers']
-            dec_hidden_layers = self.parameters.training_parameters['dec_hidden_layers']
-            activation = self.parameters.training_parameters['activation']
-            architecture = self.parameters.training_parameters['architecture']
+            casedata = reader.read_case_logfile(os.path.join(storage_dir,'CGVAE.log'))
+            img_dim = casedata.img_size
+            latent_dim = casedata.training_parameters['latent_dim']
+            enc_hidden_layers = casedata.training_parameters['enc_hidden_layers']
+            dec_hidden_layers = casedata.training_parameters['dec_hidden_layers']
+            activation = casedata.training_parameters['activation']
+            architecture = casedata.training_parameters['architecture']
 
             # Load weights into new model
-            Model = models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,activation,
+            Model = Models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,activation,
                                mode,architecture)
             weights_filename = [file for file in os.listdir(storage_dir) if file.endswith('.h5')][0]
             Model.load_weights(os.path.join(storage_dir,weights_filename))
             class history_container:
                 pass
             History = history_container()
+            with open(os.path.join(storage_dir,'History'),'rb') as f:
+                History.history = pickle.load(f)
             History.epoch = None
             History.model = Model
         except:
@@ -468,7 +499,7 @@ class CGenTrainer:
                 print('There is no model stored in the folder')
 
             alpha = self.parameters.training_parameters['learning_rate']
-            loss = models.loss_function
+            loss = Models.loss_function
 
             Model = tf.keras.models.load_model(os.path.join(storage_dir,model_folder),custom_objects={'loss':loss},compile=False)
             Model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=alpha),loss=lambda x, y: loss,
@@ -490,6 +521,7 @@ class CGenTrainer:
                 History.model = None
 
         return Model, History
+
     def reconstruct_encoder_CNN(self):
 
         img_dim = self.parameters.img_size
@@ -502,14 +534,14 @@ class CGenTrainer:
         storage_dir = os.path.join(self.case_dir,'Results','pretrained_model')
 
         if architecture == 'cnn':
-            Encoder = models.encoder_lenet(img_dim,latent_dim,enc_hidden_layers,0.0,0.0,0.0,activation)
+            Encoder = Models.encoder_lenet(img_dim,latent_dim,enc_hidden_layers,0.0,0.0,0.0,activation)
         else:
-            Encoder = models.encoder(np.prod(img_dim),enc_hidden_layers,latent_dim,activation)
+            Encoder = Models.encoder(np.prod(img_dim),enc_hidden_layers,latent_dim,activation)
         Encoder.compile(optimizer=tf.keras.optimizers.Adam(),loss=tf.keras.losses.MeanSquaredError())
 
         # Load weights into new model
-        Model = models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,'relu','train',architecture)
-        Model.load_weights(os.path.join(storage_dir,'CGAE_model_weights.h5'))
+        Model = Models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,'relu','train',architecture)
+        Model.load_weights(os.path.join(storage_dir,'CGVAE_model_weights.h5'))
         enc_CNN_last_layer_idx = [idx for (idx,weight) in enumerate(Model.weights) if weight.shape[0] == latent_dim][0]
         encoder_weights = Model.get_weights()[:enc_CNN_last_layer_idx]
         Encoder.set_weights(encoder_weights)
@@ -517,58 +549,97 @@ class CGenTrainer:
         return Encoder
 
     def export_nn_log(self):
+        def update_log(parameters, model):
+            training = OrderedDict()
+            training['ARCHITECTURE'] = parameters.training_parameters['architecture']
+            training['TRAINING SIZE'] = parameters.training_parameters['train_size']
+            training['LEARNING RATE'] = parameters.training_parameters['learning_rate']
+            training['L2 REGULARIZER'] = parameters.training_parameters['l2_reg']
+            training['L1 REGULARIZER'] = parameters.training_parameters['l1_reg']
+            training['DROPOUT'] = parameters.training_parameters['dropout']
+            training['ACTIVATION'] = parameters.training_parameters['activation']
+            training['NUMBER OF EPOCHS'] = parameters.training_parameters['epochs']
+            training['BATCH SIZE'] = parameters.training_parameters['batch_size']
+            training['LATENT DIMENSION'] = parameters.training_parameters['latent_dim']
+            training['ENCODER HIDDEN LAYERS'] = parameters.training_parameters['enc_hidden_layers']
+            training['DECODER HIDDEN LAYERS'] = parameters.training_parameters['dec_hidden_layers']
+            training['OPTIMIZER'] = [model.optimizer._name for model in model.Model]
+            training['METRICS'] = [model.metrics_names[-1] if model.metrics_names != None else None for model in model.Model]
 
-        training = OrderedDict()
-        training['TRAINING SIZE'] = self.parameters.training_parameters['train_size']
-        training['LEARNING RATE'] = self.parameters.training_parameters['learning_rate']
-        training['L2 REGULARIZER'] = self.parameters.training_parameters['l2_reg']
-        training['L1 REGULARIZER'] = self.parameters.training_parameters['l1_reg']
-        training['DROPOUT'] = self.parameters.training_parameters['dropout']
-        training['ACTIVATION'] = self.parameters.training_parameters['activation']
-        training['NUMBER OF EPOCHS'] = self.parameters.training_parameters['epochs']
-        training['BATCH SIZE'] = self.parameters.training_parameters['batch_size']
-        training['LATENT DIMENSION'] = self.parameters.training_parameters['latent_dim']
-        training['OPTIMIZER'] = [model.optimizer._name for model in self.model.Model]
-        training['METRICS'] = [model.metrics_names[-1] if model.metrics_names != None else None for model in self.model.Model]
+            analysis = OrderedDict()
+            analysis['CASE ID'] = parameters.analysis['case_ID']
+            analysis['ANALYSIS'] = parameters.analysis['type']
+            analysis['IMPORTED MODEL'] = parameters.analysis['import']
+            analysis['LAST TRAINING LOSS'] = ['{:.3f}'.format(history.history['loss'][-1]) for history in model.History]
+            analysis['LAST CV LOSS'] = ['{:.3f}'.format(history.history['val_loss'][-1]) for history in model.History]
 
-        analysis = OrderedDict()
-        analysis['CASE ID'] = self.parameters.analysis['case_ID']
-        analysis['ANALYSIS'] = self.parameters.analysis['type']
-        analysis['IMPORTED MODEL'] = self.parameters.analysis['import']
-        analysis['LAST TRAINING LOSS'] = ['{:.3f}'.format(history.history['loss'][-1]) for history in self.model.History]
-        analysis['LAST CV LOSS'] = ['{:.3f}'.format(history.history['val_loss'][-1]) for history in self.model.History]
+            architecture = OrderedDict()
+            architecture['INPUT SHAPE'] = parameters.img_size
 
-        architecture = OrderedDict()
-        architecture['INPUT SHAPE'] = self.parameters.img_size
-
-        case_ID = self.parameters.analysis['case_ID']
-        storage_folder = os.path.join(self.case_dir,'Results',str(case_ID))
-        if os.path.exists(storage_folder):
-            rmtree(storage_folder)
-        os.makedirs(storage_folder)
-        with open(os.path.join(storage_folder,'CGAE.log'),'w') as f:
-            f.write('CGAE log file\n')
-            f.write('==================================================================================================\n')
-            f.write('->ANALYSIS\n')
-            for item in analysis.items():
-                f.write(item[0] + '=' + str(item[1]) + '\n')
-            f.write('--------------------------------------------------------------------------------------------------\n')
-            f.write('->TRAINING\n')
-            for item in training.items():
-                f.write(item[0] + '=' + str(item[1]) + '\n')
-            f.write('--------------------------------------------------------------------------------------------------\n')
-            f.write('->ARCHITECTURE\n')
-            for item in architecture.items():
-                f.write(item[0] + '=' + str(item[1]) + '\n')
-            f.write('--------------------------------------------------------------------------------------------------\n')
-            f.write('->MODEL\n')
-            for model in self.model.Model:
-                model.summary(print_fn=lambda x: f.write(x + '\n'))
-            f.write('==================================================================================================\n')
+            return training, analysis, architecture
 
 
+        parameters = self.parameters
+        if parameters.analysis['type'] == 'sensanalysis':
+            varname, varvalues = parameters.sens_variable
+            for value in varvalues:
+                parameters.training_parameters[varname] = value
+                training, analysis, architecture = update_log(parameters,self.model)
+
+                case_ID = parameters.analysis['case_ID']
+                if type(value) == str:
+                    storage_folder = os.path.join(self.case_dir,'Results',str(case_ID),'Model','{}={}'.format(varname,value))
+                else:
+                    storage_folder = os.path.join(self.case_dir,'Results',str(case_ID),'Model','{}={:.3f}'.format(varname,value))
+                with open(os.path.join(storage_folder,'CGVAE.log'),'w') as f:
+                    f.write('CGVAE log file\n')
+                    f.write('==================================================================================================\n')
+                    f.write('->ANALYSIS\n')
+                    for item in analysis.items():
+                        f.write(item[0] + '=' + str(item[1]) + '\n')
+                    f.write('--------------------------------------------------------------------------------------------------\n')
+                    f.write('->TRAINING\n')
+                    for item in training.items():
+                        f.write(item[0] + '=' + str(item[1]) + '\n')
+                    f.write('--------------------------------------------------------------------------------------------------\n')
+                    f.write('->ARCHITECTURE\n')
+                    for item in architecture.items():
+                        f.write(item[0] + '=' + str(item[1]) + '\n')
+                    f.write('--------------------------------------------------------------------------------------------------\n')
+                    f.write('->MODEL\n')
+                    for model in self.model.Model:
+                        model.summary(print_fn=lambda x: f.write(x + '\n'))
+                    f.write('==================================================================================================\n')
+
+        else:
+            training, analysis, architecture = update_log(self.parameters,self.model)
+            case_ID = parameters.analysis['case_ID']
+            storage_folder = os.path.join(self.case_dir,'Results',str(case_ID))
+            with open(os.path.join(storage_folder,'Model','CGVAE.log'),'w') as f:
+                f.write('CGVAE log file\n')
+                f.write(
+                    '==================================================================================================\n')
+                f.write('->ANALYSIS\n')
+                for item in analysis.items():
+                    f.write(item[0] + '=' + str(item[1]) + '\n')
+                f.write(
+                    '--------------------------------------------------------------------------------------------------\n')
+                f.write('->TRAINING\n')
+                for item in training.items():
+                    f.write(item[0] + '=' + str(item[1]) + '\n')
+                f.write(
+                    '--------------------------------------------------------------------------------------------------\n')
+                f.write('->ARCHITECTURE\n')
+                for item in architecture.items():
+                    f.write(item[0] + '=' + str(item[1]) + '\n')
+                f.write(
+                    '--------------------------------------------------------------------------------------------------\n')
+                f.write('->MODEL\n')
+                for model in self.model.Model:
+                    model.summary(print_fn=lambda x: f.write(x + '\n'))
+                f.write(
+                    '==================================================================================================\n')
 if __name__ == '__main__':
     launcher = r'C:\Users\juan.ramos\Contour_generator\Scripts\launcher.dat'
     trainer = CGenTrainer(launcher)
     trainer.launch_analysis()
-    print()

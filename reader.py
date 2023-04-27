@@ -57,20 +57,16 @@ def read_case_setup(launch_filepath):
         casedata.training_parameters['latent_dim'] = int(matches[0]) if len(matches) == 1 else [int(item) for item in matches]
 
     # Encoder hidden dimension
-    match = re.search('ENCHIDDENDIM\s*=\s*\(\s*((\d+)\s*,?\s*(\d+)*)\s*\).*', data)
+    match = re.search('ENCHIDDENDIM\s*=\s*\((.*)\).*', data)
     if match:
-        if match.group(1) == 'NONE':
-            casedata.training_parameters['enc_hidden_layers'] = [None]
-        else:
-            casedata.training_parameters['enc_hidden_layers'] = [int(item) for item in match.groups()[1:] if item != None]
+        matches = re.findall('(\d+)',match.group(1))
+        casedata.training_parameters['enc_hidden_layers'] = int(matches[0]) if len(matches) == 1 else [int(item) for item in matches]
 
     # Decoder hidden dimension
-    match = re.search('DECHIDDENDIM\s*=\s*\(\s*((\d+)\s*,?\s*(\d+)*)\s*\).*', data)
+    match = re.search('DECHIDDENDIM\s*=\s*\((.*)\).*', data)
     if match:
-        if match.group(1) == 'NONE':
-            casedata.training_parameters['dec_hidden_layers'] = [None]
-        else:
-            casedata.training_parameters['dec_hidden_layers'] = [int(item) for item in match.groups()[1:] if item != None]
+        matches = re.findall('(\d+)',match.group(1))
+        casedata.training_parameters['dec_hidden_layers'] = int(matches[0]) if len(matches) == 1 else [int(item) for item in matches]
 
     # Training dataset size
     match = re.search('TRAINSIZE\s*=\s*(\d+\.?\d*|NONE).*', data)
@@ -234,5 +230,132 @@ def read_case_setup(launch_filepath):
     match = re.search('ROWS2COLS\s*=\s*(\d+).*', data)
     if match:
         casedata.activation_plotting['rows2cols_ratio'] = int(match.group(1))
+
+    return casedata
+
+def read_case_logfile(log_filepath):
+    file = open(log_filepath, 'r')
+    data = file.read()
+    data = re.sub('%.*\n','', data)
+
+    class setup:
+        pass
+
+    casedata = setup()
+    casedata.analysis = dict.fromkeys(['case_ID','type', 'import'], None)
+    casedata.training_parameters = dict()
+    casedata.img_resize = [None,None]
+
+    ################################################## Analysis ########################################################
+    # Case ID
+    match = re.search('CASE ID\s*=\s*(\d+\.?\d*|NONE).*', data)
+    if match:
+        casedata.analysis['case_ID'] = int(match.group(1))
+
+    # Type of analysis
+    match = re.search('ANALYSIS\s*=\s*(\w+).*', data)
+    if match:
+        casedata.analysis['type'] = str.lower(match.group(1))
+
+    # Image shape
+    match = re.search('INPUT SHAPE\s*=\s*\((.*)\).*', data)
+    if match:
+        casedata.img_size = [int(item) for item in re.findall('\d+',match.group(1))]
+
+    # Import
+    match = re.search('IMPORTED MODEL\s*=\s*(\d).*', data)
+    if match:
+        casedata.analysis['import'] = int(match.group(1))
+
+    ############################################# Training parameters ##################################################
+    # NN architecture
+    match = re.search('ARCHITECTURE\s*=\s*(\w+).*', data)
+    if match:
+        casedata.training_parameters['architecture'] = str.lower(match.group(1))
+
+    # Latent dimension
+    match = re.search('LATENT DIMENSION\s*=\s*\[*(.*)\]*', data)
+    if match:
+        matches = re.findall('(\d+)',match.group(1))
+        casedata.training_parameters['latent_dim'] = int(matches[0]) if len(matches) == 1 else [int(item) for item in matches]
+
+    # Encoder hidden dimension
+    match = re.search('ENCODER HIDDEN LAYERS\s*=\s*\[(.*)\].*', data)
+    if match:
+        matches = re.findall('(\d+)',match.group(1))
+        casedata.training_parameters['enc_hidden_layers'] = int(matches[0]) if len(matches) == 1 else [int(item) for item in matches]
+
+    # Decoder hidden dimension
+    match = re.search('DECODER HIDDEN LAYERS\s*=\s*\[(.*)\].*', data)
+    if match:
+        matches = re.findall('(\d+)',match.group(1))
+        casedata.training_parameters['dec_hidden_layers'] = int(matches[0]) if len(matches) == 1 else [int(item) for item in matches]
+
+    # Training dataset size
+    match = re.search('TRAINING SIZE\s*=\s*(\d+\.?\d*|NONE).*', data)
+    if match:
+        if match.group(1) == 'NONE':
+            casedata.training_parameters['train_size'] = 0.75
+        else:
+            casedata.training_parameters['train_size'] = float(match.group(1))
+
+    # Learning rate
+    match = re.search('LEARNING RATE\s*=\s*\[*(.*)\]*', data)
+    if match:
+        matches = re.findall('(\d+\.?\d*)',match.group(1))
+        casedata.training_parameters['learning_rate'] = float(matches[0]) if len(matches) == 1 else [float(item) for item in matches]
+
+    # L2 regularizer
+    match = re.search('L2 REGULARIZER\s*=\s*\[*(.*|NONE)\]*', data)
+    if match:
+        matches = re.findall('(\d+\.?\d*)',match.group(1))
+        if matches:
+            casedata.training_parameters['l2_reg'] = float(matches[0]) if len(matches) == 1 else [float(item) for item in matches]
+        else:
+            casedata.training_parameters['l2_reg'] = 0.0
+
+    # L1 regularizer
+    match = re.search('L1 REGULARIZER\s*=\s*\[*(.*|NONE)\]*', data)
+    if match:
+        matches = re.findall('(\d+\.?\d*)',match.group(1))
+        if matches:
+            casedata.training_parameters['l1_reg'] = float(matches[0]) if len(matches) == 1 else [float(item) for item in matches]
+        else:
+            casedata.training_parameters['l1_reg'] = 0.0
+
+    # Dropout
+    match = re.search('DROPOUT\s*=\s*\[*(.*|NONE)\]*', data)
+    if match:
+        matches = re.findall('(\d+\.?\d*)',match.group(1))
+        if matches:
+            casedata.training_parameters['dropout'] = float(matches[0]) if len(matches) == 1 else [float(item) for item in matches]
+        else:
+            casedata.training_parameters['dropout'] = 0.0
+
+    # Number of epochs
+    match = re.search('NUMBER OF EPOCHS\s*=\s*(\d+\.?\d*|NONE).*', data)
+    if match:
+        if match.group(1) == 'NONE':
+            casedata.training_parameters['epochs'] = 1
+        else:
+            casedata.training_parameters['epochs'] = int(match.group(1))
+
+    # Batch size
+    match = re.search('BATCH SIZE\s*=\s*(\d+\.?\d*|NONE).*', data)
+    if match:
+        if match.group(1) == 'NONE':
+            casedata.training_parameters['batch_size'] = None
+        else:
+            casedata.training_parameters['batch_size'] = int(match.group(1))
+
+    # Activation function
+    match = re.search('ACTIVATION\s*=\s*\[*(.*)\]*\s*.*', data)
+    if match:
+        matches = re.findall('(\w+)',match.group(1))
+        if matches:
+            if len(matches) == 1:
+                casedata.training_parameters['activation'] = str.lower(matches[0])
+            else:
+                casedata.training_parameters['activation'] = [str.lower(item) for item in matches]
 
     return casedata

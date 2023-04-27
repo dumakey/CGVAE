@@ -6,24 +6,24 @@ DATADIR=C:\Users\juan.ramos\Contour_generator
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Analysis %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-TYPEANALYSIS=SINGLETRAINING   % SINGLETRAINING, SENSANALYSIS, GENERATE, DATAGEN, PLOTACTIVATIONS
+TYPEANALYSIS=TRAINGENERATE   % SINGLETRAINING, SENSANALYSIS, TRAINGENERATE, GENERATE, DATAGEN, PLOTACTIVATIONS
 IMPORTMODEL=0
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Training parameters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Training parameters
 TRAINSIZE=0.75
-LEARNINGRATE=0.008
-L2REG=0.1
-L1REG=0.05
-DROPOUT=0.0
-EPOCHS=60
-BATCHSIZE=32
-LATENTDIM=25
-ENCHIDDENDIM=(10)
-DECHIDDENDIM=(10)
-ARCHITECTURE=MIXED  # FLAT, CNN, MIXED
-ACTIVATION=SWISH  # NONE, RELU, ELU, LEAKYRELU, SWISH, SIGMOID, TANH
+LEARNINGRATE=0.015
+L2REG=0.15
+L1REG=NONE
+DROPOUT=0.3
+EPOCHS=120
+BATCHSIZE=128
+LATENTDIM=20
+ENCHIDDENDIM=(200,50)
+DECHIDDENDIM=(50,200)
+ARCHITECTURE=FLAT  # FLAT, CNN, MIXED
+ACTIVATION=ELU  # NONE, RELU, ELU, GELU, LEAKYRELU, SWISH, SIGMOID, TANH
 % When sensitivity analysis, indicate activations separated by commas --> ACTIVATION=RELU,SWISH
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Dataset Augmentation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -33,12 +33,12 @@ AUGDATASIZE=1
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Image processing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-IMAGERESIZE=(200,150)  % (width, height)
+IMAGERESIZE=(300,200)  % (width, height)
 
 % Rotation
-ROTATION=0
+ROTATION=1
 ROTATIONCENTER=(NONE,NONE)
-ROTATIONANGLE=15
+ROTATIONANGLE=-90
 % Zoom
 ZOOM=0
 ZOOMFACTOR=1.3

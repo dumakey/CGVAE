@@ -18,18 +18,20 @@ def plot_generated_samples(datasets, img_size, storage_dir):
         n_samples = dataset.shape[0]
         n_samples_r = n_samples
         n_figs = n_samples//n_rows
+        s = 0
         for j in range(n_figs):
             n_plots = min(n_samples_r,n_rows)
             fig, ax = plt.subplots(n_plots,sharex=True,figsize=(20,20))
             ax[0].title.set_text('Generated')
             for i in range(n_plots):
-                x = np.reshape(dataset[i],(height,width))*255  # Un-scale image
+                x = np.reshape(dataset[s],(height,width))*255  # Un-scale image
                 x = x.astype('uint8')
                 _, x = cv.threshold(x,50,255,cv.THRESH_BINARY)
                 # x_dec = cv.bitwise_not(x_dec)
                 ax[i].imshow(x,cmap='Greys_r')
                 fig_set = fig.add_subplot(n_samples,2,i+1)
                 fig_set.axis('off')
+                s += 1
             if n_figs > 1:
                 if n_datasets == 1:
                     plt.savefig(os.path.join(storage_dir,'Generated_samples_{}.png'.format(j+1)), dpi=100)
@@ -53,6 +55,7 @@ def plot_dataset_samples(dataset, predictor, n_samples, img_size, storage_dir, s
     n_rows = 10
     n_samples_r = n_samples
     n_figs = n_samples//n_rows
+
     for j in range(n_figs):
         n_plots = min(n_samples_r,n_rows)
         fig, ax = plt.subplots(n_plots,2,sharex=True,figsize=(20,20))
