@@ -261,6 +261,7 @@ def read_case_logfile(log_filepath):
     match = re.search('INPUT SHAPE\s*=\s*\((.*)\).*', data)
     if match:
         casedata.img_size = [int(item) for item in re.findall('\d+',match.group(1))]
+        casedata.img_size = tuple(casedata.img_size)
 
     # Import
     match = re.search('IMPORTED MODEL\s*=\s*(\d).*', data)

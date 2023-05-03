@@ -3,8 +3,8 @@ import numpy as np
 import cv2 as cv
 from matplotlib import pyplot as plt
 from random import randint
-from Preprocessing import ImageTransformer
-import Dataset_processing as Dataprocess
+from preprocessing import ImageTransformer
+import dataset_processing
 import tensorflow as tf
 
 
@@ -12,7 +12,7 @@ def plot_generated_samples(datasets, img_size, storage_dir):
 
     width, height = img_size
     n_datasets = len(datasets)
-    n_rows = 10
+    n_rows = 2
 
     for k,dataset in enumerate(datasets):
         n_samples = dataset.shape[0]
@@ -47,7 +47,7 @@ def plot_generated_samples(datasets, img_size, storage_dir):
 
 def plot_dataset_samples(dataset, predictor, n_samples, img_size, storage_dir, stage='Train'):
 
-    data_p, _ = Dataprocess.preprocess_data(dataset[0],dataset[1])
+    data_p, _ = dataset_processing.preprocess_data(dataset[0],dataset[1])
     width, height = img_size
     m = dataset[0].shape[0]
     

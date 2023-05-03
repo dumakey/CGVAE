@@ -6,7 +6,7 @@ DATADIR=C:\Users\juan.ramos\Contour_generator
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Analysis %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-TYPEANALYSIS=TRAINGENERATE   % SINGLETRAINING, SENSANALYSIS, TRAINGENERATE, GENERATE, DATAGEN, PLOTACTIVATIONS
+TYPEANALYSIS=SINGLETRAINING   % SINGLETRAINING, SENSANALYSIS, TRAINGENERATE, GENERATE, DATAGEN, PLOTACTIVATIONS
 IMPORTMODEL=0
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Training parameters %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -34,6 +34,7 @@ AUGDATASIZE=1
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Image processing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 IMAGERESIZE=(300,200)  % (width, height)
+%IMAGERESIZE=(150,100)  % (width, height)
 
 % Rotation
 ROTATION=1

@@ -14,10 +14,10 @@ from tensorflow.python.framework.ops import disable_eager_execution, enable_eage
 disable_eager_execution()
 
 import reader
-import Dataset_processing as Dataprocess
-import Models
-import AugmentationDataset as ADS
-import Postprocessing
+import dataset_processing
+import models
+import dataset_augmentation
+import postprocessing
 
 
 class CGenTrainer:
@@ -93,9 +93,9 @@ class CGenTrainer:
         img_size = self.parameters.img_size
 
         self.datasets.data_train, self.datasets.data_cv, self.datasets.data_test = \
-        Dataprocess.get_datasets(case_dir,training_size,img_size)
+        dataset_processing.get_datasets(case_dir,training_size,img_size)
         self.datasets.dataset_train, self.datasets.dataset_cv, self.datasets.dataset_test = \
-        Dataprocess.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
+        dataset_processing.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
         if self.model.imported == False:
             self.train_model(sens_variable)
         self.export_model_performance(sens_variable)
@@ -110,9 +110,9 @@ class CGenTrainer:
         img_size = self.parameters.img_size
 
         self.datasets.data_train, self.datasets.data_cv, self.datasets.data_test = \
-        Dataprocess.get_datasets(case_dir,training_size,img_size)
+        dataset_processing.get_datasets(case_dir,training_size,img_size)
         self.datasets.dataset_train, self.datasets.dataset_cv, self.datasets.dataset_test = \
-        Dataprocess.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
+        dataset_processing.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
         if self.model.imported == False:
             self.train_model()
         self.export_model_performance()
@@ -128,9 +128,9 @@ class CGenTrainer:
         img_size = self.parameters.img_size
 
         self.datasets.data_train, self.datasets.data_cv, self.datasets.data_test = \
-        Dataprocess.get_datasets(case_dir,training_size,img_size)
+        dataset_processing.get_datasets(case_dir,training_size,img_size)
         self.datasets.dataset_train, self.datasets.dataset_cv, self.datasets.dataset_test = \
-        Dataprocess.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
+        dataset_processing.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
         if self.model.imported == False:
             self.train_model()
         self.export_model_performance()
@@ -168,9 +168,9 @@ class CGenTrainer:
 
         # Generate datasets
         self.datasets.data_train, self.datasets.data_cv, self.datasets.data_test = \
-            Dataprocess.get_datasets(case_dir,training_size,img_dims)
+        dataset_processing.get_datasets(case_dir,training_size,img_dims)
         self.datasets.dataset_train, self.datasets.dataset_cv, self.datasets.dataset_test = \
-        Dataprocess.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
+        dataset_processing.get_tensorflow_datasets(self.datasets.data_train,self.datasets.data_cv,self.datasets.data_test,batch_size)
 
         m_tr = self.datasets.data_train[0].shape[0]
         m_cv = self.datasets.data_cv[0].shape[0]
@@ -196,7 +196,7 @@ class CGenTrainer:
         # Plot
         for idx in idx_set:
             img = dataset[idx,:]
-            Postprocessing.monitor_hidden_layers(img,encoder,case_dir,figs_per_row,rows_to_cols_ratio,idx)
+            postprocessing.monitor_hidden_layers(img,encoder,case_dir,figs_per_row,rows_to_cols_ratio,idx)
 
     def generate_augmented_data(self, transformations, augmented_dataset_size=1):
 
@@ -204,9 +204,9 @@ class CGenTrainer:
         augmented_dataset_dir = os.path.join(self.case_dir,'Datasets','Augmented')
 
         # Unpack data
-        X = Dataprocess.read_dataset(case_folder=self.case_dir,dataset_folder='To_augment')
+        X = dataset_processing.read_dataset(case_folder=self.case_dir,dataset_folder='To_augment')
         # Generate new dataset
-        data_augmenter = ADS.datasetAugmentationClass(X,transformations,augmented_dataset_size,augmented_dataset_dir)
+        data_augmenter = dataset_augmentation.datasetAugmentationClass(X,transformations,augmented_dataset_size,augmented_dataset_dir)
         data_augmenter.transform_images()
         data_augmenter.export_augmented_dataset()
 
@@ -220,26 +220,26 @@ class CGenTrainer:
             rmtree(storage_dir)
         os.makedirs(storage_dir)
 
+        # Read parameters
         case_dir = self.case_dir
-        training_size = self.parameters.training_parameters['train_size']
-        batch_size = self.parameters.training_parameters['batch_size']
-        img_size = self.parameters.img_size
-        width, height = self.parameters.img_size
+        casedata = reader.read_case_logfile(os.path.join(case_dir,'Results','pretrained_model','CGVAE.log'))
         n_samples = self.parameters.samples_generation['n_samples']
+        training_size = casedata.training_parameters['train_size']
+        img_size = casedata.img_size
 
         if self.model.imported == False:
             self.singletraining()
 
         if not hasattr(self, 'data_train'):
-            data_train, data_cv, data_test = Dataprocess.get_datasets(case_dir,training_size,img_size)
+            data_train, data_cv, data_test = dataset_processing.get_datasets(case_dir,training_size,img_size)
             for model in self.model.Model:
-                Postprocessing.plot_dataset_samples(data_train,model.predict,n_samples,img_size,storage_dir,stage='Train')
-                Postprocessing.plot_dataset_samples(data_cv,model.predict,n_samples,img_size,storage_dir,stage='Cross-validation')
-                Postprocessing.plot_dataset_samples(data_test,model.predict,n_samples,img_size,storage_dir,stage='Test')
+                postprocessing.plot_dataset_samples(data_train,model.predict,n_samples,img_size,storage_dir,stage='Train')
+                postprocessing.plot_dataset_samples(data_cv,model.predict,n_samples,img_size,storage_dir,stage='Cross-validation')
+                postprocessing.plot_dataset_samples(data_test,model.predict,n_samples,img_size,storage_dir,stage='Test')
 
         ## GENERATE NEW DATA - SAMPLING ##
-        X_samples = self.generate_samples()
-        Postprocessing.plot_generated_samples(X_samples,img_size,storage_dir)
+        X_samples = self.generate_samples(casedata)
+        postprocessing.plot_generated_samples(X_samples,img_size,storage_dir)
 
     def train_model(self, sens_var=None):
 
@@ -248,7 +248,6 @@ class CGenTrainer:
         latent_dim = self.parameters.training_parameters['latent_dim']
         enc_hidden_layers = self.parameters.training_parameters['enc_hidden_layers']
         dec_hidden_layers = self.parameters.training_parameters['dec_hidden_layers']
-        latent_dim = self.parameters.training_parameters['latent_dim']
         alpha = self.parameters.training_parameters['learning_rate']
         nepoch = self.parameters.training_parameters['epochs']
         batch_size = self.parameters.training_parameters['batch_size']
@@ -260,7 +259,7 @@ class CGenTrainer:
 
         self.model.Model = []
         self.model.History = []
-        Model = Models.VAE
+        Model = models.VAE
         if sens_var == None:  # If it is a one-time training
             self.model.Model.append(Model(input_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,alpha,l2_reg,
                                                l1_reg,dropout,activation,mode='train',architecture=architecture))
@@ -322,18 +321,20 @@ class CGenTrainer:
                                                         validation_data=self.datasets.dataset_cv,validation_steps=None,
                                                         verbose=1))
 
-    def generate_samples(self):
+    def generate_samples(self, parameters):
 
         ## BUILD DECODER ##
-        casedata = reader.read_case_logfile(os.path.join(self.case_dir,'Results','pretrained_model','CGVAE.log'))
+        output_dim = parameters.img_size
+        latent_dim = parameters.training_parameters['latent_dim']
+        alpha = parameters.training_parameters['learning_rate']
+        dec_hidden_layers = parameters.training_parameters['dec_hidden_layers']
+        activation = parameters.training_parameters['activation']
+        architecture = parameters.training_parameters['architecture']
+        training_size = parameters.training_parameters['train_size']
+        batch_size = parameters.training_parameters['batch_size']
         n_samples = self.parameters.samples_generation['n_samples']
-        output_dim = casedata.img_size
-        latent_dim = casedata.training_parameters['latent_dim']
-        alpha = casedata.training_parameters['learning_rate']
-        dec_hidden_layers = casedata.training_parameters['dec_hidden_layers']
-        activation = casedata.training_parameters['activation']
-        architecture = casedata.training_parameters['architecture']
-        decoder = Models.VAE(output_dim,latent_dim,[],dec_hidden_layers,alpha,0.0,0.0,0.0,activation,'sample',architecture)  # No regularization
+        
+        decoder = models.VAE(output_dim,latent_dim,[],dec_hidden_layers,alpha,0.0,0.0,0.0,activation,'sample',architecture)  # No regularization
         
         X_samples = []
         for model in self.model.Model:
@@ -480,7 +481,7 @@ class CGenTrainer:
             architecture = casedata.training_parameters['architecture']
 
             # Load weights into new model
-            Model = Models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,activation,
+            Model = models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,activation,
                                mode,architecture)
             weights_filename = [file for file in os.listdir(storage_dir) if file.endswith('.h5')][0]
             Model.load_weights(os.path.join(storage_dir,weights_filename))
@@ -499,7 +500,7 @@ class CGenTrainer:
                 print('There is no model stored in the folder')
 
             alpha = self.parameters.training_parameters['learning_rate']
-            loss = Models.loss_function
+            loss = models.loss_function
 
             Model = tf.keras.models.load_model(os.path.join(storage_dir,model_folder),custom_objects={'loss':loss},compile=False)
             Model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=alpha),loss=lambda x, y: loss,
@@ -534,13 +535,13 @@ class CGenTrainer:
         storage_dir = os.path.join(self.case_dir,'Results','pretrained_model')
 
         if architecture == 'cnn':
-            Encoder = Models.encoder_lenet(img_dim,latent_dim,enc_hidden_layers,0.0,0.0,0.0,activation)
+            Encoder = models.encoder_lenet(img_dim,latent_dim,enc_hidden_layers,0.0,0.0,0.0,activation)
         else:
-            Encoder = Models.encoder(np.prod(img_dim),enc_hidden_layers,latent_dim,activation)
+            Encoder = models.encoder(np.prod(img_dim),enc_hidden_layers,latent_dim,activation)
         Encoder.compile(optimizer=tf.keras.optimizers.Adam(),loss=tf.keras.losses.MeanSquaredError())
 
         # Load weights into new model
-        Model = Models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,'relu','train',architecture)
+        Model = models.VAE(img_dim,latent_dim,enc_hidden_layers,dec_hidden_layers,0.001,0.0,0.0,0.0,'relu','train',architecture)
         Model.load_weights(os.path.join(storage_dir,'CGVAE_model_weights.h5'))
         enc_CNN_last_layer_idx = [idx for (idx,weight) in enumerate(Model.weights) if weight.shape[0] == latent_dim][0]
         encoder_weights = Model.get_weights()[:enc_CNN_last_layer_idx]

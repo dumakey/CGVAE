@@ -4,7 +4,7 @@ import cv2 as cv
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-from Preprocessing import ImageTransformer
+from preprocessing import ImageTransformer
  
 
 def preprocess_tf_data(im_tilde, im):
