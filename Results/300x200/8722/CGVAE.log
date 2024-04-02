@@ -1,0 +1,52 @@
+CGVAE log file
+==================================================================================================
+->ANALYSIS
+CASE ID=8722
+ANALYSIS=traingenerate
+IMPORTED MODEL=0
+LAST TRAINING LOSS=['9191.858']
+LAST CV LOSS=['10077.091']
+--------------------------------------------------------------------------------------------------
+->TRAINING
+ARCHITECTURE=flat
+TRAINING SIZE=0.75
+LEARNING RATE=0.01
+L2 REGULARIZER=0.1
+L1 REGULARIZER=0.0
+DROPOUT=0.3
+ACTIVATION=swish
+NUMBER OF EPOCHS=120
+BATCH SIZE=128
+LATENT DIMENSION=20
+ENCODER HIDDEN LAYERS=[200, 100]
+DECODER HIDDEN LAYERS=[100, 200]
+OPTIMIZER=['Adam']
+METRICS=['mean_squared_error']
+--------------------------------------------------------------------------------------------------
+->ARCHITECTURE
+INPUT SHAPE=(300, 200)
+--------------------------------------------------------------------------------------------------
+->MODEL
+Model: "model"
+__________________________________________________________________________________________________
+ Layer (type)                   Output Shape         Param #     Connected to                     
+==================================================================================================
+ input_3 (InputLayer)           [(None, 60000)]      0           []                               
+                                                                                                  
+ encoder (Sequential)           (None, 40)           12025540    ['input_3[0][0]']                
+                                                                                                  
+ lambda (Lambda)                (None, 20)           0           ['encoder[0][0]']                
+                                                                                                  
+ lambda_1 (Lambda)              (None, 20)           0           ['encoder[0][0]']                
+                                                                                                  
+ lambda_2 (Lambda)              (None, 20)           0           ['lambda[0][0]',                 
+                                                                  'lambda_1[0][0]']               
+                                                                                                  
+ decoder (Sequential)           (None, 60000)        12083500    ['lambda_2[0][0]']               
+                                                                                                  
+==================================================================================================
+Total params: 24,109,040
+Trainable params: 24,107,840
+Non-trainable params: 1,200
+__________________________________________________________________________________________________
+==================================================================================================
